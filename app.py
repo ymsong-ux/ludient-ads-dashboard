@@ -131,91 +131,190 @@ def render_meta_page():
     main_col, action_col = st.columns([2.5, 1])
 
     with main_col:
-        st.subheader("캠페인 현황")
+        campaigns = mock.meta_campaigns()
+        adsets = mock.meta_adsets()
+        ads = mock.meta_ads()
 
-        df = mock.meta_campaigns()
+        tab_camp, tab_set, tab_ad = st.tabs([
+            f"📁 캠페인 ({len(campaigns)})",
+            f"🎯 광고세트 ({len(adsets)})",
+            f"🎨 광고 ({len(ads)})"
+        ])
 
-        # 컬럼 표시 정리
-        display_df = df.copy()
-        display_df["진단"] = display_df["diag_color"]
-        display_df["ON/OFF"] = display_df["active"]
-        display_df = display_df[[
-            "진단", "ON/OFF", "name", "objective", "spend",
-            "purchases", "cpa", "roas", "ctr", "cvr", "frequency", "learning", "status"
-        ]]
+        # ────────── 캠페인 탭 ──────────
+        with tab_camp:
+            st.caption("**캠페인 = 무엇을·왜?** 목표·예산. 캠페인 OFF면 하위 다 OFF")
 
-        column_config_meta = {
-            "진단": st.column_config.TextColumn("진단", width="small"),
-            "ON/OFF": st.column_config.CheckboxColumn("ON/OFF", default=False),
-            "name": st.column_config.TextColumn("캠페인", width="large"),
-            "objective": st.column_config.TextColumn("목표"),
-            "spend": st.column_config.NumberColumn("지출", format="₩%d"),
-            "purchases": st.column_config.NumberColumn("구매"),
-            "cpa": st.column_config.NumberColumn("CPA", format="₩%d"),
-            "roas": st.column_config.NumberColumn("ROAS", format="%d%%"),
-            "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
-            "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
-            "frequency": st.column_config.NumberColumn("빈도", format="%.1f"),
-            "learning": st.column_config.TextColumn("학습"),
-            "status": st.column_config.TextColumn("권장"),
-        }
-        disabled_meta = ["진단", "name", "objective", "spend", "purchases", "cpa",
-                          "roas", "ctr", "cvr", "frequency", "learning", "status"]
+            df_camp = campaigns.copy()
+            df_camp["진단"] = df_camp["diag_color"]
+            df_camp["ON/OFF"] = df_camp["active"]
+            df_camp = df_camp[[
+                "진단", "ON/OFF", "name", "objective", "spend",
+                "purchases", "cpa", "roas", "ctr", "cvr", "frequency", "learning", "status"
+            ]]
 
-        c1, c2 = st.columns([5, 1])
-        if c2.button("🔍 전체 화면", key="meta_fullscreen", width="stretch"):
-            st.session_state["meta_full"] = True
-
-        st.data_editor(
-            display_df,
-            column_config=column_config_meta,
-            hide_index=True,
-            width="stretch",
-            height=320,
-            disabled=disabled_meta,
-            key="meta_campaign_table"
-        )
-
-        if st.session_state.get("meta_full"):
-            @st.dialog("캠페인 전체 화면", width="large")
-            def show_meta_full():
-                st.data_editor(
-                    display_df,
-                    column_config=column_config_meta,
-                    hide_index=True,
-                    width="stretch",
-                    height=700,
-                    disabled=disabled_meta,
-                    key="meta_campaign_table_full"
-                )
-            show_meta_full()
-            st.session_state["meta_full"] = False
-
-        # 차트
-        st.subheader("시계열 트렌드")
-
-        ts = mock.meta_timeseries()
-        chart_tab1, chart_tab2 = st.tabs(["광고비·매출", "ROAS·CTR"])
-
-        with chart_tab1:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=ts["date"], y=ts["광고비"], name="광고비", marker_color="#94a3b8"))
-            fig.add_trace(go.Bar(x=ts["date"], y=ts["매출"], name="매출", marker_color="#4338ca"))
-            fig.update_layout(height=320, margin=dict(t=20, b=20, l=20, r=20), barmode="group")
-            st.plotly_chart(fig, width="stretch")
-
-        with chart_tab2:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=ts["date"], y=ts["ROAS"], name="ROAS (%)", line=dict(color="#059669", width=2)))
-            fig.add_trace(go.Scatter(x=ts["date"], y=ts["CTR"]*100, name="CTR (%×100)", line=dict(color="#dc2626", width=2), yaxis="y2"))
-            fig.add_hline(y=250, line_dash="dash", line_color="orange", annotation_text="손익분기 ROAS 250%")
-            fig.update_layout(
-                height=320,
-                margin=dict(t=20, b=20, l=20, r=20),
-                yaxis=dict(title="ROAS"),
-                yaxis2=dict(title="CTR", overlaying="y", side="right"),
+            st.data_editor(
+                df_camp,
+                column_config={
+                    "진단": st.column_config.TextColumn("진단", width="small"),
+                    "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                    "name": st.column_config.TextColumn("캠페인", width="large"),
+                    "objective": st.column_config.TextColumn("목표"),
+                    "spend": st.column_config.NumberColumn("지출", format="₩%d"),
+                    "purchases": st.column_config.NumberColumn("구매"),
+                    "cpa": st.column_config.NumberColumn("CPA", format="₩%d"),
+                    "roas": st.column_config.NumberColumn("ROAS", format="%d%%"),
+                    "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                    "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                    "frequency": st.column_config.NumberColumn("빈도", format="%.1f"),
+                    "learning": st.column_config.TextColumn("학습"),
+                    "status": st.column_config.TextColumn("권장"),
+                },
+                hide_index=True, width="stretch", height=280,
+                disabled=["진단", "name", "objective", "spend", "purchases", "cpa",
+                          "roas", "ctr", "cvr", "frequency", "learning", "status"],
+                key="meta_camp_table"
             )
-            st.plotly_chart(fig, width="stretch")
+
+            st.subheader("시계열 트렌드")
+            ts = mock.meta_timeseries()
+            ct1, ct2 = st.tabs(["광고비·매출", "ROAS·CTR"])
+            with ct1:
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=ts["date"], y=ts["광고비"], name="광고비", marker_color="#94a3b8"))
+                fig.add_trace(go.Bar(x=ts["date"], y=ts["매출"], name="매출", marker_color="#4338ca"))
+                fig.update_layout(height=280, margin=dict(t=20, b=20, l=20, r=20), barmode="group")
+                st.plotly_chart(fig, width="stretch")
+            with ct2:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=ts["date"], y=ts["ROAS"], name="ROAS (%)", line=dict(color="#059669", width=2)))
+                fig.add_trace(go.Scatter(x=ts["date"], y=ts["CTR"]*100, name="CTR (%×100)", line=dict(color="#dc2626", width=2), yaxis="y2"))
+                fig.add_hline(y=250, line_dash="dash", line_color="orange", annotation_text="손익분기 250%")
+                fig.update_layout(height=280, margin=dict(t=20, b=20, l=20, r=20),
+                                  yaxis=dict(title="ROAS"),
+                                  yaxis2=dict(title="CTR", overlaying="y", side="right"))
+                st.plotly_chart(fig, width="stretch")
+
+        # ────────── 광고세트 탭 ──────────
+        with tab_set:
+            st.caption("**광고세트 = 누구·어디·얼마?** 타겟·예산·노출 위치. 효율 안 나오면 타겟 문제일 가능성")
+
+            camp_options = ["전체"] + campaigns["name"].tolist()
+            sel_camp = st.selectbox("캠페인 필터", camp_options, key="filt_camp")
+
+            df_set = adsets.merge(
+                campaigns[["id", "name"]].rename(columns={"name": "campaign_name"}),
+                left_on="campaign_id", right_on="id", how="left"
+            )
+            if sel_camp != "전체":
+                df_set = df_set[df_set["campaign_name"] == sel_camp]
+
+            df_set["진단"] = df_set["diag_color"]
+            df_set["ON/OFF"] = df_set["active"]
+            df_set_view = df_set[[
+                "진단", "ON/OFF", "campaign_name", "name", "target", "daily_budget",
+                "spend", "purchases", "cpa", "roas", "ctr", "cvr",
+                "frequency", "learning", "status"
+            ]]
+
+            st.data_editor(
+                df_set_view,
+                column_config={
+                    "진단": st.column_config.TextColumn("진단", width="small"),
+                    "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                    "campaign_name": st.column_config.TextColumn("소속 캠페인", width="medium"),
+                    "name": st.column_config.TextColumn("광고세트", width="medium"),
+                    "target": st.column_config.TextColumn("타겟"),
+                    "daily_budget": st.column_config.NumberColumn("일예산", format="₩%d"),
+                    "spend": st.column_config.NumberColumn("지출", format="₩%d"),
+                    "purchases": st.column_config.NumberColumn("구매"),
+                    "cpa": st.column_config.NumberColumn("CPA", format="₩%d"),
+                    "roas": st.column_config.NumberColumn("ROAS", format="%d%%"),
+                    "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                    "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                    "frequency": st.column_config.NumberColumn("빈도", format="%.1f"),
+                    "learning": st.column_config.TextColumn("학습"),
+                    "status": st.column_config.TextColumn("권장"),
+                },
+                hide_index=True, width="stretch", height=420,
+                disabled=["진단", "campaign_name", "name", "target", "daily_budget",
+                          "spend", "purchases", "cpa", "roas", "ctr", "cvr",
+                          "frequency", "learning", "status"],
+                key="meta_set_table"
+            )
+
+            with st.expander("💡 광고세트 단계 진단 가이드"):
+                st.markdown("""
+- **같은 캠페인 안에서 광고세트 ROAS 차이 큼** → 타겟 문제. 효율 좋은 타겟에 예산 몰기
+- **모든 광고세트 ROAS 낮음** → 캠페인 가설 자체 재검토 (제품·메시지·타겟군)
+- **학습 미완료**: 광고세트당 7일 50건 미달이면 학습 못 끝남. 예산 증액 또는 광고세트 통합
+- **빈도(Frequency) 5 이상** → 광고 피로. 새 소재 추가
+- **오디언스 오버랩 의심**: 같은 캠페인 내 광고세트 두 개 ROAS 비슷한데 CPM 점점 ↑ → 오버랩 진단 도구로 확인
+                """)
+
+        # ────────── 광고 탭 ──────────
+        with tab_ad:
+            st.caption("**광고 = 뭘 보여줄까?** 소재·카피·CTA. 같은 광고세트에서 소재별 CTR 차이 = 소재 문제")
+
+            f1, f2 = st.columns(2)
+            sel_camp2 = f1.selectbox("캠페인 필터", ["전체"] + campaigns["name"].tolist(), key="filt_camp2")
+            adset_options = ["전체"] + adsets["name"].unique().tolist()
+            sel_set = f2.selectbox("광고세트 필터", adset_options, key="filt_set")
+
+            df_ad = ads.copy()
+            adset_map = adsets.copy()
+            adset_map["adset_idx"] = adset_map["campaign_id"] + "|" + adset_map["name"].str.split("_").str[0]
+            df_ad = df_ad.merge(
+                adset_map[["adset_idx", "campaign_id", "name"]].rename(columns={"name": "adset_name"}),
+                on="adset_idx", how="left"
+            )
+            df_ad = df_ad.merge(
+                campaigns[["id", "name"]].rename(columns={"name": "campaign_name"}),
+                left_on="campaign_id", right_on="id", how="left"
+            )
+            if sel_camp2 != "전체":
+                df_ad = df_ad[df_ad["campaign_name"] == sel_camp2]
+            if sel_set != "전체":
+                df_ad = df_ad[df_ad["adset_name"] == sel_set]
+
+            df_ad["진단"] = df_ad["diag_color"]
+            df_ad["ON/OFF"] = df_ad["active"]
+            df_ad_view = df_ad[[
+                "진단", "ON/OFF", "campaign_name", "adset_name", "name", "format",
+                "spend", "impressions", "clicks", "ctr", "purchases", "cvr", "status"
+            ]]
+
+            st.data_editor(
+                df_ad_view,
+                column_config={
+                    "진단": st.column_config.TextColumn("진단", width="small"),
+                    "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                    "campaign_name": st.column_config.TextColumn("캠페인", width="medium"),
+                    "adset_name": st.column_config.TextColumn("광고세트", width="medium"),
+                    "name": st.column_config.TextColumn("광고 소재", width="large"),
+                    "format": st.column_config.TextColumn("형식"),
+                    "spend": st.column_config.NumberColumn("지출", format="₩%d"),
+                    "impressions": st.column_config.NumberColumn("노출"),
+                    "clicks": st.column_config.NumberColumn("클릭"),
+                    "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                    "purchases": st.column_config.NumberColumn("구매"),
+                    "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                    "status": st.column_config.TextColumn("권장"),
+                },
+                hide_index=True, width="stretch", height=520,
+                disabled=["진단", "campaign_name", "adset_name", "name", "format",
+                          "spend", "impressions", "clicks", "ctr", "purchases", "cvr", "status"],
+                key="meta_ad_table"
+            )
+
+            with st.expander("💡 광고 소재 단계 진단 가이드"):
+                st.markdown("""
+- **같은 광고세트에서 소재별 CTR 큰 차이** → 소재 문제. 약한 소재 OFF + 새 변형(A')
+- **모든 소재 CTR 낮음** → 타겟이 메시지에 안 맞음 (광고세트 단계로 돌아가기)
+- **CTR 좋은데 CVR 낮음** → 낚시 카피 의심. 후킹과 랜딩 정합성 점검
+- **A vs A' vs A''**: 한 번에 한 변수만 바꾸기 (썸네일·카피·CTA 중 하나)
+- **소재 형식 비교**: 영상 vs 이미지 vs 카루셀 — 어느 형식이 우리 페르소나에 맞나
+                """)
 
     with action_col:
         st.markdown("### 🔔 오늘 추천 액션")

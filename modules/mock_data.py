@@ -21,82 +21,73 @@ def meta_kpi():
 
 def meta_campaigns():
     return pd.DataFrame([
-        {
-            "active": False,
-            "name": "260406_전환_카드뉴스(2)",
-            "objective": "판매",
-            "spend": 449_738,
-            "purchases": 4,
-            "cpa": 112_435,
-            "roas": 178,
-            "ctr": 1.2,
-            "cvr": 0.9,
-            "frequency": 4.2,
-            "learning": "완료",
-            "status": "OFF 권장",
-            "diag_color": "🔴",
-        },
-        {
-            "active": False,
-            "name": "260406_전환_카드뉴스(1)",
-            "objective": "판매",
-            "spend": 456_935,
-            "purchases": 6,
-            "cpa": 76_156,
-            "roas": 263,
-            "ctr": 1.8,
-            "cvr": 1.4,
-            "frequency": 3.5,
-            "learning": "완료",
-            "status": "유지",
-            "diag_color": "🟢",
-        },
-        {
-            "active": False,
-            "name": "260327_전환_파트너(2)",
-            "objective": "판매",
-            "spend": 348_782,
-            "purchases": 2,
-            "cpa": 174_391,
-            "roas": 115,
-            "ctr": 0.9,
-            "cvr": 0.6,
-            "frequency": 2.8,
-            "learning": "미완료",
-            "status": "OFF 권장",
-            "diag_color": "🔴",
-        },
-        {
-            "active": False,
-            "name": "260320_전환_파트너(1)",
-            "objective": "판매",
-            "spend": 319_099,
-            "purchases": 0,
-            "cpa": None,
-            "roas": 0,
-            "ctr": 0.7,
-            "cvr": 0,
-            "frequency": 2.1,
-            "learning": "미완료",
-            "status": "OFF 권장",
-            "diag_color": "🔴",
-        },
-        {
-            "active": False,
-            "name": "260312_트래픽_영상",
-            "objective": "트래픽",
-            "spend": 234_687,
-            "purchases": None,
-            "cpa": None,
-            "roas": None,
-            "ctr": 2.4,
-            "cvr": None,
-            "frequency": 1.8,
-            "learning": "—",
-            "status": "관찰",
-            "diag_color": "🟡",
-        },
+        {"id": "c_260406_2", "active": False, "name": "260406_전환_카드뉴스(2)", "objective": "판매",
+         "spend": 449_738, "purchases": 4, "cpa": 112_435, "roas": 178,
+         "ctr": 1.2, "cvr": 0.9, "frequency": 4.2, "learning": "완료",
+         "status": "OFF 권장", "diag_color": "🔴"},
+        {"id": "c_260406_1", "active": False, "name": "260406_전환_카드뉴스(1)", "objective": "판매",
+         "spend": 456_935, "purchases": 6, "cpa": 76_156, "roas": 263,
+         "ctr": 1.8, "cvr": 1.4, "frequency": 3.5, "learning": "완료",
+         "status": "유지", "diag_color": "🟢"},
+        {"id": "c_260327_2", "active": False, "name": "260327_전환_파트너(2)", "objective": "판매",
+         "spend": 348_782, "purchases": 2, "cpa": 174_391, "roas": 115,
+         "ctr": 0.9, "cvr": 0.6, "frequency": 2.8, "learning": "미완료",
+         "status": "OFF 권장", "diag_color": "🔴"},
+        {"id": "c_260320_1", "active": False, "name": "260320_전환_파트너(1)", "objective": "판매",
+         "spend": 319_099, "purchases": 0, "cpa": None, "roas": 0,
+         "ctr": 0.7, "cvr": 0, "frequency": 2.1, "learning": "미완료",
+         "status": "OFF 권장", "diag_color": "🔴"},
+        {"id": "c_260312_v", "active": False, "name": "260312_트래픽_영상", "objective": "트래픽",
+         "spend": 234_687, "purchases": None, "cpa": None, "roas": None,
+         "ctr": 2.4, "cvr": None, "frequency": 1.8, "learning": "—",
+         "status": "관찰", "diag_color": "🟡"},
     ])
+
+
+def meta_adsets():
+    rows = [
+        # campaign_id, name, target, daily_budget, spend, purchases, cpa, roas, ctr, cvr, frequency, learning, status, diag
+        ("c_260406_2", "1A_25-40여성_스킨케어관심", "핵심타겟", 50000, 220000, 1, 220000, 95, 0.9, 0.7, 4.5, "완료", "OFF 권장", "🔴"),
+        ("c_260406_2", "1B_Lookalike1%_구매자", "유사타겟", 50000, 229738, 3, 76579, 215, 1.4, 1.1, 3.8, "완료", "유지", "🟢"),
+        ("c_260406_1", "1A_25-40여성_스킨케어관심", "핵심타겟", 50000, 230000, 3, 76667, 245, 1.6, 1.2, 3.5, "완료", "유지", "🟢"),
+        ("c_260406_1", "1B_Lookalike1%_구매자", "유사타겟", 50000, 226935, 3, 75645, 281, 1.9, 1.6, 3.4, "완료", "증액 권장", "🟢"),
+        ("c_260327_2", "2A_30-50_안티에이징", "핵심타겟", 30000, 180000, 1, 180000, 105, 0.8, 0.5, 2.5, "미완료", "OFF 권장", "🔴"),
+        ("c_260327_2", "2B_고객리스트_리타겟팅", "맞춤타겟", 30000, 168782, 1, 168782, 125, 0.9, 0.7, 2.9, "미완료", "OFF 권장", "🔴"),
+        ("c_260320_1", "3A_파트너_광범위", "핵심타겟", 30000, 319099, 0, None, 0, 0.7, 0, 2.0, "미완료", "OFF 권장", "🔴"),
+        ("c_260312_v", "4A_25-40여성_트래픽", "핵심타겟", 30000, 234687, None, None, None, 2.4, None, 1.8, "—", "관찰", "🟡"),
+    ]
+    cols = ["campaign_id", "name", "target", "daily_budget", "spend", "purchases",
+            "cpa", "roas", "ctr", "cvr", "frequency", "learning", "status", "diag_color"]
+    df = pd.DataFrame(rows, columns=cols)
+    df.insert(0, "active", False)
+    return df
+
+
+def meta_ads():
+    rows = [
+        # adset_idx (campaign_id + adset name 조합), name, format, spend, impressions, clicks, ctr, purchases, cvr, status, diag
+        ("c_260406_2|1A", "A1_PDRN_비포애프터_15s", "영상", 110000, 9200, 78, 0.85, 1, 1.28, "OFF 권장", "🔴"),
+        ("c_260406_2|1A", "A2_PDRN_의사추천_15s", "영상", 110000, 9000, 86, 0.96, 0, 0, "OFF 권장", "🔴"),
+        ("c_260406_2|1B", "A1_PDRN_비포애프터_15s", "영상", 115000, 9800, 132, 1.35, 2, 1.52, "유지", "🟢"),
+        ("c_260406_2|1B", "A2_PDRN_의사추천_15s", "영상", 114738, 9600, 142, 1.48, 1, 0.70, "관찰", "🟡"),
+        ("c_260406_1|1A", "A1_PDRN_비포애프터_15s_v2", "영상", 115000, 8800, 145, 1.65, 2, 1.38, "유지", "🟢"),
+        ("c_260406_1|1A", "A2_PDRN_임상결과_15s", "영상", 115000, 8500, 158, 1.86, 1, 0.63, "관찰", "🟡"),
+        ("c_260406_1|1B", "A1_PDRN_비포애프터_15s_v2", "영상", 113000, 8900, 165, 1.85, 2, 1.21, "유지", "🟢"),
+        ("c_260406_1|1B", "A2_PDRN_임상결과_15s", "영상", 113935, 8700, 178, 2.05, 1, 0.56, "관찰", "🟡"),
+        ("c_260327_2|2A", "B1_재생크림_비포애프터", "이미지", 90000, 5400, 41, 0.76, 0, 0, "OFF 권장", "🔴"),
+        ("c_260327_2|2A", "B2_재생크림_연령후기", "이미지", 90000, 5200, 47, 0.90, 1, 2.13, "OFF 권장", "🔴"),
+        ("c_260327_2|2B", "B1_재생크림_비포애프터", "이미지", 84000, 6100, 55, 0.90, 0, 0, "OFF 권장", "🔴"),
+        ("c_260327_2|2B", "B2_재생크림_연령후기", "이미지", 84782, 5900, 51, 0.86, 1, 1.96, "관찰", "🟡"),
+        ("c_260320_1|3A", "P1_파트너_브랜드스토리", "카루셀", 160000, 11200, 78, 0.70, 0, 0, "OFF 권장", "🔴"),
+        ("c_260320_1|3A", "P2_파트너_제품라인", "카루셀", 159099, 10800, 71, 0.66, 0, 0, "OFF 권장", "🔴"),
+        ("c_260312_v|4A", "V1_트러블해결_30s", "영상", 117000, 4800, 122, 2.54, None, None, "유지", "🟢"),
+        ("c_260312_v|4A", "V2_시술비교_30s", "영상", 117687, 4600, 105, 2.28, None, None, "관찰", "🟡"),
+    ]
+    cols = ["adset_idx", "name", "format", "spend", "impressions", "clicks",
+            "ctr", "purchases", "cvr", "status", "diag_color"]
+    df = pd.DataFrame(rows, columns=cols)
+    df.insert(0, "active", False)
+    return df
 
 
 def meta_timeseries():
