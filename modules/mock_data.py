@@ -140,6 +140,50 @@ def meta_actions():
     ]
 
 
+def naver_campaigns():
+    rows = [
+        # id, name, type, daily_budget, spend, impressions, clicks, ctr, conv, cvr, status, diag
+        ("nc1", "루디언트_PDRN", "파워링크", 30000, 78000, 11200, 198, 1.77, 12, 6.06, "유지", "🟢"),
+        ("nc2", "루디언트_시즌_재생", "파워링크", 25000, 32000, 5800, 105, 1.81, 4, 3.81, "관찰", "🟡"),
+        ("nc3", "루디언트_안티에이징", "파워링크", 15000, 12438, 1600, 31, 1.94, 1, 3.23, "OFF 권장", "🔴"),
+    ]
+    cols = ["id", "name", "type", "daily_budget", "spend", "impressions",
+            "clicks", "ctr", "conversions", "cvr", "status", "diag_color"]
+    df = pd.DataFrame(rows, columns=cols)
+    df.insert(0, "active", True)
+    return df
+
+
+def naver_adgroups():
+    rows = [
+        # campaign_id, name, default_bid, spend, impressions, clicks, ctr, conv, cvr, status, diag
+        ("nc1", "PDRN_핵심", 1300, 52000, 7200, 138, 1.92, 9, 6.52, "증액 권장", "🟢"),
+        ("nc1", "시술후_롱테일", 800, 26000, 4000, 60, 1.50, 3, 5.00, "유지", "🟢"),
+        ("nc2", "재생크림_빅", 2200, 24000, 4200, 71, 1.69, 2, 2.82, "관찰", "🟡"),
+        ("nc2", "재생크림_롱테일", 1100, 8000, 1600, 34, 2.13, 2, 5.88, "유지", "🟢"),
+        ("nc3", "안티에이징_빅", 1900, 10000, 1100, 13, 1.18, 0, 0, "OFF 권장", "🔴"),
+        ("nc3", "주름개선_확장", 2500, 2438, 500, 18, 3.60, 1, 5.56, "관찰", "🟡"),
+    ]
+    cols = ["campaign_id", "name", "default_bid", "spend", "impressions",
+            "clicks", "ctr", "conversions", "cvr", "status", "diag_color"]
+    df = pd.DataFrame(rows, columns=cols)
+    df.insert(0, "active", True)
+    return df
+
+
+def naver_timeseries():
+    days = pd.date_range(end=datetime.now(), periods=30, freq="D")
+    import numpy as np
+    np.random.seed(11)
+    return pd.DataFrame({
+        "date": days,
+        "노출": np.random.normal(2700, 600, 30).clip(1000),
+        "클릭": np.random.normal(48, 12, 30).clip(15),
+        "전환": np.random.normal(2.4, 0.9, 30).clip(0),
+        "광고비": np.random.normal(17500, 3500, 30).clip(5000),
+    })
+
+
 def naver_kpi():
     return {
         "노출": 18_600,

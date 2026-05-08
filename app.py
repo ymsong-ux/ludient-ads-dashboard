@@ -135,6 +135,29 @@ def render_meta_page():
         adsets = mock.meta_adsets()
         ads = mock.meta_ads()
 
+        # 시계열 차트 (탭 위, 항상 보임)
+        st.subheader("📈 시계열 트렌드 (30일)")
+        ts = mock.meta_timeseries()
+        ct1, ct2 = st.tabs(["광고비·매출", "ROAS·CTR"])
+        with ct1:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=ts["date"], y=ts["광고비"], name="광고비", marker_color="#94a3b8"))
+            fig.add_trace(go.Bar(x=ts["date"], y=ts["매출"], name="매출", marker_color="#4338ca"))
+            fig.update_layout(height=260, margin=dict(t=20, b=20, l=20, r=20), barmode="group")
+            st.plotly_chart(fig, width="stretch")
+        with ct2:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ts["date"], y=ts["ROAS"], name="ROAS (%)", line=dict(color="#059669", width=2)))
+            fig.add_trace(go.Scatter(x=ts["date"], y=ts["CTR"]*100, name="CTR (%×100)", line=dict(color="#dc2626", width=2), yaxis="y2"))
+            fig.add_hline(y=250, line_dash="dash", line_color="orange", annotation_text="손익분기 250%")
+            fig.update_layout(height=260, margin=dict(t=20, b=20, l=20, r=20),
+                              yaxis=dict(title="ROAS"),
+                              yaxis2=dict(title="CTR", overlaying="y", side="right"))
+            st.plotly_chart(fig, width="stretch")
+
+        st.divider()
+
+        st.subheader("🔬 단계별 진단")
         tab_camp, tab_set, tab_ad = st.tabs([
             f"📁 캠페인 ({len(campaigns)})",
             f"🎯 광고세트 ({len(adsets)})",
@@ -176,24 +199,13 @@ def render_meta_page():
                 key="meta_camp_table"
             )
 
-            st.subheader("시계열 트렌드")
-            ts = mock.meta_timeseries()
-            ct1, ct2 = st.tabs(["광고비·매출", "ROAS·CTR"])
-            with ct1:
-                fig = go.Figure()
-                fig.add_trace(go.Bar(x=ts["date"], y=ts["광고비"], name="광고비", marker_color="#94a3b8"))
-                fig.add_trace(go.Bar(x=ts["date"], y=ts["매출"], name="매출", marker_color="#4338ca"))
-                fig.update_layout(height=280, margin=dict(t=20, b=20, l=20, r=20), barmode="group")
-                st.plotly_chart(fig, width="stretch")
-            with ct2:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=ts["date"], y=ts["ROAS"], name="ROAS (%)", line=dict(color="#059669", width=2)))
-                fig.add_trace(go.Scatter(x=ts["date"], y=ts["CTR"]*100, name="CTR (%×100)", line=dict(color="#dc2626", width=2), yaxis="y2"))
-                fig.add_hline(y=250, line_dash="dash", line_color="orange", annotation_text="손익분기 250%")
-                fig.update_layout(height=280, margin=dict(t=20, b=20, l=20, r=20),
-                                  yaxis=dict(title="ROAS"),
-                                  yaxis2=dict(title="CTR", overlaying="y", side="right"))
-                st.plotly_chart(fig, width="stretch")
+            with st.expander("💡 캠페인 단계 진단 가이드"):
+                st.markdown("""
+- **캠페인 ROAS 손익분기 미만** → 그 캠페인의 광고세트 탭으로 이동해서 어느 세트가 문제인지 봄
+- **학습 미완료**: 캠페인 전체 전환 50건 미달이면 알고리즘 학습 못 함. 예산 증액 또는 광고세트 통합
+- **빈도(Frequency) 5 이상** → 광고 피로 (한 사람이 5번 이상 봄). 새 소재 추가 또는 타겟 확장
+- **캠페인 목표(전환·트래픽·인지)별 평가 지표가 다름**: 인지 캠페인은 ROAS로 평가하지 말 것
+                """)
 
         # ────────── 광고세트 탭 ──────────
         with tab_set:
@@ -344,84 +356,211 @@ def render_naver_page():
     main_col, action_col = st.columns([2.5, 1])
 
     with main_col:
-        head_col, btn_col, filt_col = st.columns([2, 1, 1])
-        head_col.subheader(f"키워드 현황 ({len(mock.naver_keywords())}개)")
+        # 시계열 차트 (탭 위, 항상 보임)
+        st.subheader("📈 시계열 트렌드 (30일)")
+        nts = mock.naver_timeseries()
+        nct1, nct2 = st.tabs(["노출·클릭", "전환·광고비"])
+        with nct1:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=nts["date"], y=nts["노출"], name="노출", marker_color="#94a3b8"))
+            fig.add_trace(go.Scatter(x=nts["date"], y=nts["클릭"]*30, name="클릭 (×30)", line=dict(color="#dc2626", width=2), yaxis="y2"))
+            fig.update_layout(height=260, margin=dict(t=20, b=20, l=20, r=20),
+                              yaxis=dict(title="노출"),
+                              yaxis2=dict(title="클릭", overlaying="y", side="right"))
+            st.plotly_chart(fig, width="stretch")
+        with nct2:
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=nts["date"], y=nts["광고비"], name="광고비", marker_color="#0891b2"))
+            fig.add_trace(go.Scatter(x=nts["date"], y=nts["전환"]*5000, name="전환 (×5000)", line=dict(color="#059669", width=2), yaxis="y2"))
+            fig.update_layout(height=260, margin=dict(t=20, b=20, l=20, r=20),
+                              yaxis=dict(title="광고비"),
+                              yaxis2=dict(title="전환", overlaying="y", side="right"))
+            st.plotly_chart(fig, width="stretch")
 
-        df = mock.naver_keywords()
-        display_df = df.copy()
-        display_df["진단"] = display_df["diag_color"]
-        display_df["ON/OFF"] = display_df["active"]
-        display_df = display_df[[
-            "진단", "ON/OFF", "keyword", "match", "bid",
-            "monthly_search", "impressions", "clicks", "ctr",
-            "purchases", "cvr", "rank_avg", "quality", "status"
-        ]]
+        st.divider()
 
-        # 진단 필터
-        diag_filter = filt_col.selectbox(
-            "필터",
-            ["전체", "🟢 유지/증액", "🟡 관찰", "🔴 OFF 권장"],
-            label_visibility="collapsed"
-        )
-        if diag_filter == "🟢 유지/증액":
-            display_df = display_df[display_df["진단"] == "🟢"]
-        elif diag_filter == "🟡 관찰":
-            display_df = display_df[display_df["진단"] == "🟡"]
-        elif diag_filter == "🔴 OFF 권장":
-            display_df = display_df[display_df["진단"] == "🔴"]
+        st.subheader("🔬 단계별 진단")
+        ncamps = mock.naver_campaigns()
+        nadgroups = mock.naver_adgroups()
+        nkeywords = mock.naver_keywords()
 
-        if btn_col.button("🔍 전체 화면", key="naver_fullscreen", width="stretch"):
-            st.session_state["naver_full"] = True
+        ntab_camp, ntab_grp, ntab_kw = st.tabs([
+            f"📁 캠페인 ({len(ncamps)})",
+            f"🎯 광고그룹 ({len(nadgroups)})",
+            f"🔑 키워드 ({len(nkeywords)})"
+        ])
 
-        column_config_naver = {
-            "진단": st.column_config.TextColumn("진단", width="small"),
-            "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
-            "keyword": st.column_config.TextColumn("키워드", width="medium"),
-            "match": st.column_config.TextColumn("매칭"),
-            "bid": st.column_config.NumberColumn("입찰가", format="₩%d"),
-            "monthly_search": st.column_config.NumberColumn("월 검색량"),
-            "impressions": st.column_config.NumberColumn("노출"),
-            "clicks": st.column_config.NumberColumn("클릭"),
-            "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
-            "purchases": st.column_config.NumberColumn("구매"),
-            "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
-            "rank_avg": st.column_config.NumberColumn("평균 순위", format="%.1f"),
-            "quality": st.column_config.NumberColumn("품질"),
-            "status": st.column_config.TextColumn("권장"),
-        }
-        disabled_cols = ["진단", "keyword", "match", "monthly_search", "impressions",
-                          "clicks", "ctr", "purchases", "cvr", "rank_avg", "quality", "status"]
+        # ── 네이버 캠페인 탭 ──
+        with ntab_camp:
+            st.caption("**캠페인 = 광고 종류 + 일예산.** 파워링크/쇼핑/브랜드별로 분리")
+            df_nc = ncamps.copy()
+            df_nc["진단"] = df_nc["diag_color"]
+            df_nc["ON/OFF"] = df_nc["active"]
+            df_nc_view = df_nc[[
+                "진단", "ON/OFF", "name", "type", "daily_budget",
+                "spend", "impressions", "clicks", "ctr", "conversions", "cvr", "status"
+            ]]
+            st.data_editor(
+                df_nc_view,
+                column_config={
+                    "진단": st.column_config.TextColumn("진단", width="small"),
+                    "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                    "name": st.column_config.TextColumn("캠페인", width="medium"),
+                    "type": st.column_config.TextColumn("유형"),
+                    "daily_budget": st.column_config.NumberColumn("일예산", format="₩%d"),
+                    "spend": st.column_config.NumberColumn("지출", format="₩%d"),
+                    "impressions": st.column_config.NumberColumn("노출"),
+                    "clicks": st.column_config.NumberColumn("클릭"),
+                    "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                    "conversions": st.column_config.NumberColumn("전환"),
+                    "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                    "status": st.column_config.TextColumn("권장"),
+                },
+                hide_index=True, width="stretch", height=200,
+                disabled=["진단", "name", "type", "daily_budget", "spend",
+                          "impressions", "clicks", "ctr", "conversions", "cvr", "status"],
+                key="naver_camp_table"
+            )
 
-        st.data_editor(
-            display_df,
-            column_config=column_config_naver,
-            hide_index=True,
-            width="stretch",
-            height=420,
-            disabled=disabled_cols,
-            key="naver_keyword_table"
-        )
+        # ── 네이버 광고그룹 탭 ──
+        with ntab_grp:
+            st.caption("**광고그룹 = 입찰가 기본값 + 노출 매체 + 시간대.** 같은 캠페인 내 효율 비교")
+            ncamp_options = ["전체"] + ncamps["name"].tolist()
+            sel_ncamp = st.selectbox("캠페인 필터", ncamp_options, key="filt_ncamp")
 
-        # 전체 화면 다이얼로그
-        if st.session_state.get("naver_full"):
-            @st.dialog("키워드 전체 화면", width="large")
-            def show_full():
-                st.data_editor(
-                    display_df,
-                    column_config=column_config_naver,
-                    hide_index=True,
-                    width="stretch",
-                    height=700,
-                    disabled=disabled_cols,
-                    key="naver_keyword_table_full"
-                )
-            show_full()
-            st.session_state["naver_full"] = False
+            df_grp = nadgroups.merge(
+                ncamps[["id", "name"]].rename(columns={"name": "campaign_name"}),
+                left_on="campaign_id", right_on="id", how="left"
+            )
+            if sel_ncamp != "전체":
+                df_grp = df_grp[df_grp["campaign_name"] == sel_ncamp]
 
-        # 키워드 기회 + 검색 트렌드
+            df_grp["진단"] = df_grp["diag_color"]
+            df_grp["ON/OFF"] = df_grp["active"]
+            df_grp_view = df_grp[[
+                "진단", "ON/OFF", "campaign_name", "name", "default_bid",
+                "spend", "impressions", "clicks", "ctr",
+                "conversions", "cvr", "status"
+            ]]
+            st.data_editor(
+                df_grp_view,
+                column_config={
+                    "진단": st.column_config.TextColumn("진단", width="small"),
+                    "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                    "campaign_name": st.column_config.TextColumn("캠페인", width="medium"),
+                    "name": st.column_config.TextColumn("광고그룹", width="medium"),
+                    "default_bid": st.column_config.NumberColumn("기본 입찰가", format="₩%d"),
+                    "spend": st.column_config.NumberColumn("지출", format="₩%d"),
+                    "impressions": st.column_config.NumberColumn("노출"),
+                    "clicks": st.column_config.NumberColumn("클릭"),
+                    "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                    "conversions": st.column_config.NumberColumn("전환"),
+                    "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                    "status": st.column_config.TextColumn("권장"),
+                },
+                hide_index=True, width="stretch", height=300,
+                disabled=["진단", "campaign_name", "name", "default_bid", "spend",
+                          "impressions", "clicks", "ctr", "conversions", "cvr", "status"],
+                key="naver_grp_table"
+            )
+
+            with st.expander("💡 광고그룹 단계 진단 가이드"):
+                st.markdown("""
+- **같은 캠페인 광고그룹 간 CVR 차이 큼** → 키워드 의도 차이. 효율 좋은 그룹 위주로 예산 분배
+- **빅키워드 그룹 ROAS 낮고 롱테일 그룹 ROAS 높음** → 빅키워드 OFF, 롱테일 강화
+- **노출 매체별 분리 검토**: PC vs 모바일 / 통합검색 vs 콘텐츠
+- **시간대별 입찰가 가중**: 전환 잘 나오는 시간대 (저녁 8~12시 + 주말 오후) 가중치 ↑
+                """)
+
+        # ── 네이버 키워드 탭 ──
+        with ntab_kw:
+            st.caption("**키워드 = 검색어별 입찰가.** 가장 세부 단계")
+            filt_col, btn_col = st.columns([4, 1])
+
+            df_kw = nkeywords.copy()
+            df_kw["진단"] = df_kw["diag_color"]
+            df_kw["ON/OFF"] = df_kw["active"]
+            df_kw_view = df_kw[[
+                "진단", "ON/OFF", "keyword", "match", "bid",
+                "monthly_search", "impressions", "clicks", "ctr",
+                "purchases", "cvr", "rank_avg", "quality", "status"
+            ]]
+
+            diag_filter = filt_col.selectbox(
+                "진단 필터",
+                ["전체", "🟢 유지/증액", "🟡 관찰", "🔴 OFF 권장"],
+                key="kw_filter"
+            )
+            if diag_filter == "🟢 유지/증액":
+                df_kw_view = df_kw_view[df_kw_view["진단"] == "🟢"]
+            elif diag_filter == "🟡 관찰":
+                df_kw_view = df_kw_view[df_kw_view["진단"] == "🟡"]
+            elif diag_filter == "🔴 OFF 권장":
+                df_kw_view = df_kw_view[df_kw_view["진단"] == "🔴"]
+
+            if btn_col.button("🔍 전체 화면", key="naver_fullscreen", width="stretch"):
+                st.session_state["naver_full"] = True
+
+            column_config_naver = {
+                "진단": st.column_config.TextColumn("진단", width="small"),
+                "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
+                "keyword": st.column_config.TextColumn("키워드", width="medium"),
+                "match": st.column_config.TextColumn("매칭"),
+                "bid": st.column_config.NumberColumn("입찰가", format="₩%d"),
+                "monthly_search": st.column_config.NumberColumn("월 검색량"),
+                "impressions": st.column_config.NumberColumn("노출"),
+                "clicks": st.column_config.NumberColumn("클릭"),
+                "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+                "purchases": st.column_config.NumberColumn("구매"),
+                "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+                "rank_avg": st.column_config.NumberColumn("평균 순위", format="%.1f"),
+                "quality": st.column_config.NumberColumn("품질"),
+                "status": st.column_config.TextColumn("권장"),
+            }
+            disabled_cols = ["진단", "keyword", "match", "monthly_search", "impressions",
+                              "clicks", "ctr", "purchases", "cvr", "rank_avg", "quality", "status"]
+
+            st.data_editor(
+                df_kw_view,
+                column_config=column_config_naver,
+                hide_index=True,
+                width="stretch",
+                height=420,
+                disabled=disabled_cols,
+                key="naver_keyword_table"
+            )
+
+            if st.session_state.get("naver_full"):
+                @st.dialog("키워드 전체 화면", width="large")
+                def show_full():
+                    st.data_editor(
+                        df_kw_view,
+                        column_config=column_config_naver,
+                        hide_index=True,
+                        width="stretch",
+                        height=700,
+                        disabled=disabled_cols,
+                        key="naver_keyword_table_full"
+                    )
+                show_full()
+                st.session_state["naver_full"] = False
+
+            with st.expander("💡 키워드 단계 진단 가이드"):
+                st.markdown("""
+- **품질지수 4 미만** → CPC 비효율. 키워드-소재-랜딩 일치도 점검 (광고 제목에 키워드 포함)
+- **빅키워드 검색량↑ but CTR↓** → 의도 모호, 우리와 안 맞음. 롱테일로 전환
+- **롱테일 CVR↑ but 노출 부족** → 입찰가 ↑ 또는 매칭 확장
+- **순위 5등 이하** → 같은 입찰가에서 순위 ↓ = 품질지수 문제. 소재·랜딩 개선
+- **CVR 0% + 노출 多** → 즉시 OFF 또는 키워드 자체 부적합
+                """)
+
+        st.divider()
+
+        # 키워드 기회 + 검색 트렌드 (탭 밖, 항상 보임)
+        st.subheader("🔍 키워드 발굴·트렌드")
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("신규 키워드 기회")
+            st.markdown("**신규 키워드 기회**")
             opp = mock.naver_keyword_opportunity()
             st.caption("검색량 ↑ + 우리 미입찰 + USP 매칭")
             st.dataframe(
@@ -438,17 +577,19 @@ def render_naver_page():
             )
 
         with c2:
-            st.subheader("검색 트렌드 (90일)")
+            st.markdown("**검색 트렌드 (90일)**")
             st.caption("네이버 데이터랩 상대 지수")
             trend = mock.naver_search_trend()
             fig = go.Figure()
             for col in ["PDRN 크림", "재생 크림", "시술 후 크림"]:
                 fig.add_trace(go.Scatter(x=trend["date"], y=trend[col], name=col, mode="lines"))
-            fig.update_layout(height=280, margin=dict(t=20, b=20, l=20, r=20))
+            fig.update_layout(height=240, margin=dict(t=20, b=20, l=20, r=20))
             st.plotly_chart(fig, width="stretch")
 
+        st.divider()
+
         # SERP 경쟁사
-        st.subheader('"PDRN 크림" 검색 결과 모니터링')
+        st.subheader('🌐 "PDRN 크림" 검색 결과 모니터링')
         st.caption("매일 자동 SERP 캡처 — 경쟁사 광고 카피 추적")
         comp = mock.serp_competitors()
         for _, row in comp.iterrows():
