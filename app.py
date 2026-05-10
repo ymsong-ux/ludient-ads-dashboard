@@ -11,6 +11,7 @@ import pandas as pd
 from datetime import datetime
 
 from modules import mock_data as mock
+from modules import data, config
 
 
 # ───────────────── 페이지 설정 ─────────────────
@@ -70,15 +71,57 @@ with st.sidebar:
     )
 
     if st.button("🔄 데이터 새로고침", width="stretch"):
-        st.success("갱신 완료")
+        data.clear_cache()
+        st.success("캐시 비움")
+        st.rerun()
 
     st.divider()
-    st.caption("마지막 업데이트")
+
+    # 데이터 소스 상태
+    src = config.data_source_status()
+    st.caption("**데이터 소스**")
+    st.caption(f"Meta · {src['meta']}")
+    st.caption(f"Naver · {src['naver']}")
+
+    # 토큰 입력
+    with st.expander("🔐 API 토큰 연결"):
+        st.caption("입력 시 즉시 실데이터로 전환")
+        meta_tok = st.text_input(
+            "Meta Access Token",
+            value=st.session_state.get("META_ACCESS_TOKEN", ""),
+            type="password",
+            help="developers.facebook.com/tools/explorer (ads_read 권한)"
+        )
+        meta_aid = st.text_input(
+            "Meta 광고 계정 ID",
+            value=st.session_state.get("META_AD_ACCOUNT_ID", "1964326457797"),
+        )
+        if st.button("Meta 연결", width="stretch", key="connect_meta"):
+            st.session_state["META_ACCESS_TOKEN"] = meta_tok.strip()
+            st.session_state["META_AD_ACCOUNT_ID"] = meta_aid.strip()
+            data.clear_cache()
+            st.success("연결 시도")
+            st.rerun()
+
+        st.divider()
+        n_api = st.text_input("Naver API Key",
+                              value=st.session_state.get("NAVER_API_KEY", ""), type="password")
+        n_sec = st.text_input("Naver Secret Key",
+                              value=st.session_state.get("NAVER_SECRET_KEY", ""), type="password")
+        n_cid = st.text_input("Naver Customer ID",
+                              value=st.session_state.get("NAVER_CUSTOMER_ID", ""))
+        if st.button("Naver 연결", width="stretch", key="connect_naver"):
+            st.session_state["NAVER_API_KEY"] = n_api.strip()
+            st.session_state["NAVER_SECRET_KEY"] = n_sec.strip()
+            st.session_state["NAVER_CUSTOMER_ID"] = n_cid.strip()
+            data.clear_cache()
+            st.success("연결 시도")
+            st.rerun()
+
+    st.divider()
+    st.caption("마지막 갱신")
     st.caption(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    st.caption("자동 갱신: 30분")
-
-    st.divider()
-    st.caption("⚠️ 시연 모드 (Mock 데이터)")
+    st.caption("캐시 TTL: 10분")
 
 
 # ───────────────── 공통 헬퍼 ─────────────────
@@ -115,7 +158,7 @@ def render_meta_page():
     st.title("Meta 광고")
     st.caption("Ludient 계정 · 페이스북·인스타그램 광고 · 4월 데이터 · % = 직전 30일 대비 증감")
 
-    kpi = mock.meta_kpi()
+    kpi = data.get_meta_kpi()
 
     # 운영 상태 알림
     if kpi.get("운영_상태"):
@@ -143,13 +186,13 @@ def render_meta_page():
     main_col, action_col = st.columns([2.5, 1])
 
     with main_col:
-        campaigns = mock.meta_campaigns()
-        adsets = mock.meta_adsets()
-        ads = mock.meta_ads()
+        campaigns = data.get_meta_campaigns()
+        adsets = data.get_meta_adsets()
+        ads = data.get_meta_ads()
 
         # 시계열 차트 (탭 위, 항상 보임)
         st.subheader("📈 시계열 트렌드 (30일)")
-        ts = mock.meta_timeseries()
+        ts = data.get_meta_timeseries()
         ct1, ct2 = st.tabs(["광고비·매출", "ROAS·CTR"])
         with ct1:
             fig = go.Figure()
@@ -344,7 +387,7 @@ def render_meta_page():
         st.markdown("### 🔔 오늘 추천 액션")
         st.caption("본인이 검토 후 실행")
 
-        for action in mock.meta_actions():
+        for action in data.get_meta_actions():
             render_action_card(action, "meta")
 
 
