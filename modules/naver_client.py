@@ -78,14 +78,36 @@ def _diagnose_keyword(ctr, cvr, conv, quality):
 
 
 def fetch_bizmoney():
-    """비즈머니 잔액."""
-    try:
-        data = _call("GET", "/billing/bizmoney")
-        if isinstance(data, dict):
-            return data.get("bizmoney", 0)
-        return 0
-    except Exception:
-        return 0
+    """비즈머니 잔액. 에러는 그대로 propagate (silent fail 금지)."""
+    data = _call("GET", "/billing/bizmoney")
+    if isinstance(data, dict):
+        return data.get("bizmoney", 0)
+    return 0
+
+
+def debug_signature(method="GET", uri="/ncc/campaigns"):
+    """서명 디버깅용 — 실제 호출 없이 서명 정보만 반환."""
+    timestamp = str(int(time.time() * 1000))
+    secret = config.get_naver_secret_key()
+    api_key = config.get_naver_api_key()
+    customer = config.get_naver_customer_id()
+
+    message = f"{timestamp}.{method}.{uri}"
+    signature = _sign(method, uri, timestamp)
+
+    return {
+        "timestamp": timestamp,
+        "method": method,
+        "uri": uri,
+        "message_to_sign": message,
+        "secret_key_length": len(secret) if secret else 0,
+        "secret_key_preview": f"{secret[:8]}...{secret[-8:]}" if secret and len(secret) > 16 else "(짧음)",
+        "secret_key_has_whitespace": secret != secret.strip() if secret else False,
+        "api_key_length": len(api_key) if api_key else 0,
+        "api_key_preview": f"{api_key[:12]}...{api_key[-8:]}" if api_key and len(api_key) > 20 else "(짧음)",
+        "customer_id": customer,
+        "signature": signature,
+    }
 
 
 def fetch_campaigns_raw():

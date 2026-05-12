@@ -1377,9 +1377,10 @@ def render_diagnostic_page():
     # 검색어 보고서 응답 샘플 (실데이터 디버깅용)
     if config.has_naver_credentials():
         with st.expander("🔍 Naver API 응답 샘플 (실데이터 디버깅)"):
+            from modules import naver_client
+
             st.markdown("**비즈머니 잔액 직접 호출**")
             try:
-                from modules import naver_client
                 balance = naver_client.fetch_bizmoney()
                 st.success(f"잔액: ₩{balance:,}")
             except Exception as e:
@@ -1387,13 +1388,53 @@ def render_diagnostic_page():
 
             st.markdown("**캠페인 원시 데이터**")
             try:
-                from modules import naver_client
                 raw = naver_client.fetch_campaigns_raw()
                 st.write(f"캠페인 수: {len(raw)}")
                 if raw:
                     st.json(raw[0] if isinstance(raw, list) else raw)
             except Exception as e:
                 st.error(f"호출 실패: {e}")
+
+        with st.expander("🔐 서명 검증 (Invalid Signature 디버깅용)"):
+            from modules import naver_client
+            st.caption("403 Invalid Signature 에러 발생 시 입력값 검증")
+
+            info = naver_client.debug_signature()
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**입력 키 검증**")
+                st.write(f"- API Key 길이: **{info['api_key_length']}** 글자")
+                st.write(f"- API Key 미리보기: `{info['api_key_preview']}`")
+                st.write(f"- Secret Key 길이: **{info['secret_key_length']}** 글자")
+                st.write(f"- Secret Key 미리보기: `{info['secret_key_preview']}`")
+                st.write(f"- Customer ID: `{info['customer_id']}`")
+                if info["secret_key_has_whitespace"]:
+                    st.error("⚠️ Secret Key에 공백·줄바꿈 포함!")
+                else:
+                    st.success("✅ Secret Key 공백 없음")
+
+            with c2:
+                st.markdown("**서명 정보**")
+                st.code(f"timestamp: {info['timestamp']}\n"
+                        f"method: {info['method']}\n"
+                        f"uri: {info['uri']}\n"
+                        f"signed message: {info['message_to_sign']}\n"
+                        f"signature: {info['signature']}", language="text")
+
+            st.divider()
+            st.markdown("**기대 키 형식 (Naver 광고주센터 기준)**")
+            st.write("- API Key (엑세스 라이센스): 약 80~100 글자, 16진수 (예: `0100000000f004b98d845f4f9f...`)")
+            st.write("- Secret Key (비밀키): 약 40~50 글자, base64 (예: `AQAAAADwBLmNhF9Pn2mRrRu46VRaHUAy...`, `==` 로 끝남)")
+            st.write("- Customer ID: 숫자 (예: `4274720`)")
+
+            st.warning("""
+**Invalid Signature 해결 순서**:
+1. Naver 광고주센터 → 도구 → API 사용 관리에서 키 다시 확인
+2. 위 '키 길이'가 기대 값과 다르면 → 사이드바에서 다시 입력 (공백 주의)
+3. **API Key와 Secret Key를 바꿔서 입력했을 가능성** → 위치 확인
+4. 그래도 실패 시 → 광고주센터에서 **'재발급'** 클릭 (새 키로 시도)
+            """)
 
     # 액션 로그
     if st.session_state.get("action_log"):
