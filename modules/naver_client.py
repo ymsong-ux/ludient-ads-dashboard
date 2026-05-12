@@ -331,6 +331,88 @@ def fetch_kpi(days=7):
     }
 
 
+def keyword_tool(hint_keywords, include_hints=True):
+    """네이버 키워드 도구 API.
+
+    입력: hint_keywords (str 또는 list, 1~5개)
+    반환: DataFrame [keyword, monthly_pc, monthly_mo, avg_cpc, comp_idx, avg_rank, ...]
+    """
+    if isinstance(hint_keywords, str):
+        kws = [k.strip() for k in hint_keywords.split(",") if k.strip()]
+    else:
+        kws = list(hint_keywords)
+    kws = kws[:5]  # 최대 5개
+    if not kws:
+        return pd.DataFrame()
+
+    try:
+        data = _call("GET", "/keywordstool", params={
+            "hintKeywords": ",".join(kws),
+            "includeHintKeywords": "1" if include_hints else "0",
+            "showDetail": "1",
+        })
+    except Exception:
+        return pd.DataFrame()
+
+    items = (data or {}).get("keywordList", [])
+    if not items:
+        return pd.DataFrame()
+
+    def _num(v):
+        """Naver는 '<10' 같은 마스킹 값을 반환할 수 있음."""
+        if isinstance(v, (int, float)):
+            return int(v)
+        if isinstance(v, str):
+            if v.startswith("<"):
+                return 5  # < 10이면 대략 5로 추정
+            try:
+                return int(float(v))
+            except ValueError:
+                return 0
+        return 0
+
+    rows = []
+    for k in items:
+        pc = _num(k.get("monthlyPcQcCnt", 0))
+        mo = _num(k.get("monthlyMobileQcCnt", 0))
+        total = pc + mo
+        # 평균 CPC는 PC·MO 클릭률·검색량으로 추정 (정확치는 입찰 시뮬 별도)
+        pc_clk = _num(k.get("monthlyAvePcClkCnt", 0))
+        mo_clk = _num(k.get("monthlyAveMobileClkCnt", 0))
+        # 경쟁 정도
+        comp = k.get("compIdx", "중간")
+        comp_kr = {"높음": "🔴 높음", "중간": "🟡 중간", "낮음": "🟢 낮음"}.get(comp, comp)
+
+        # 추천 점수 (검색량 ↑ + 경쟁도 ↓ + 의도 명확 = 우리에게 유리)
+        comp_score = {"낮음": 3, "중간": 2, "높음": 1}.get(comp, 2)
+        if total < 100:
+            attractiveness = "검색량 부족"
+        elif total > 50000 and comp == "높음":
+            attractiveness = "🔴 빅키워드 (대기업과 경쟁)"
+        elif total > 1000 and comp == "낮음":
+            attractiveness = "🟢 우리에게 유리 (롱테일)"
+        elif comp_score >= 2 and total > 500:
+            attractiveness = "🟡 검토 가치"
+        else:
+            attractiveness = "🟡 관찰"
+
+        rows.append({
+            "keyword": k.get("relKeyword"),
+            "monthly_pc": pc,
+            "monthly_mo": mo,
+            "monthly_total": total,
+            "mobile_ratio": (mo / total * 100) if total else 0,
+            "avg_pc_clicks": pc_clk,
+            "avg_mo_clicks": mo_clk,
+            "competition": comp_kr,
+            "avg_rank": float(k.get("plAvgDepth") or 0),
+            "attractiveness": attractiveness,
+        })
+    df = pd.DataFrame(rows)
+    # 검색량 많은 순서로
+    return df.sort_values("monthly_total", ascending=False).reset_index(drop=True)
+
+
 def fetch_timeseries(days=30):
     """일별 시계열. /stats?datePreset 사용."""
     camps = fetch_campaigns_raw()

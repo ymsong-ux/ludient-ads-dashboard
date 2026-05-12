@@ -404,6 +404,80 @@ def naver_actions():
     ]
 
 
+def keyword_research(hint_keywords):
+    """키워드 도구 Mock — 더마/스킨케어 가상 데이터."""
+    if isinstance(hint_keywords, str):
+        hints = [k.strip() for k in hint_keywords.split(",") if k.strip()]
+    else:
+        hints = list(hint_keywords)
+
+    base = {
+        "PDRN": (12000, 35000, "🟢 낮음", "🟢 우리에게 유리 (롱테일)"),
+        "PDRN 크림": (8000, 24000, "🟡 중간", "🟢 우리에게 유리 (롱테일)"),
+        "PDRN 효과": (3500, 12000, "🟢 낮음", "🟢 우리에게 유리 (롱테일)"),
+        "PDRN 부작용": (1200, 4500, "🟢 낮음", "🟢 우리에게 유리 (롱테일)"),
+        "재생 크림": (15000, 42000, "🔴 높음", "🔴 빅키워드 (대기업과 경쟁)"),
+        "안티에이징 크림": (8500, 28000, "🔴 높음", "🔴 빅키워드 (대기업과 경쟁)"),
+        "시술 후 크림": (2200, 8500, "🟢 낮음", "🟢 우리에게 유리 (롱테일)"),
+        "기미 크림": (12000, 38000, "🔴 높음", "🔴 빅키워드"),
+        "모공 앰플": (4500, 16000, "🟡 중간", "🟡 검토 가치"),
+        "주름 개선": (18000, 55000, "🔴 높음", "🔴 빅키워드"),
+        "센텔라 크림": (3200, 9800, "🟡 중간", "🟡 검토 가치"),
+        "비타민C 앰플": (5500, 18000, "🟡 중간", "🟡 검토 가치"),
+    }
+
+    rows = []
+    seen = set()
+
+    # 입력 키워드 우선
+    for h in hints:
+        if h in seen:
+            continue
+        seen.add(h)
+        if h in base:
+            pc, mo, comp, attr = base[h]
+        else:
+            pc, mo, comp, attr = (1000, 3000, "🟡 중간", "🟡 검토 가치")
+        total = pc + mo
+        rows.append({
+            "keyword": h,
+            "monthly_pc": pc,
+            "monthly_mo": mo,
+            "monthly_total": total,
+            "mobile_ratio": (mo / total * 100) if total else 0,
+            "avg_pc_clicks": int(pc * 0.015),
+            "avg_mo_clicks": int(mo * 0.012),
+            "competition": comp,
+            "avg_rank": 3.5,
+            "attractiveness": attr,
+        })
+
+    # 연관 키워드 추가 (입력에 없는 것)
+    for k, (pc, mo, comp, attr) in base.items():
+        if k in seen:
+            continue
+        # 입력 키워드와 연관 있는 것만 (대충 hint의 일부 포함)
+        if any(h in k or k in h for h in hints):
+            total = pc + mo
+            rows.append({
+                "keyword": k,
+                "monthly_pc": pc,
+                "monthly_mo": mo,
+                "monthly_total": total,
+                "mobile_ratio": (mo / total * 100) if total else 0,
+                "avg_pc_clicks": int(pc * 0.015),
+                "avg_mo_clicks": int(mo * 0.012),
+                "competition": comp,
+                "avg_rank": 4.2,
+                "attractiveness": attr,
+            })
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    return df.sort_values("monthly_total", ascending=False).reset_index(drop=True)
+
+
 def serp_competitors(keyword="PDRN 크림"):
     return pd.DataFrame([
         {"rank": 1, "advertiser": "닥터지", "headline": "PDRN 재생 앰플 - 8주 임상시험 결과", "description": "피부과 임상으로 입증된 효과. 첫 구매 30% 할인", "url": "drg.co.kr", "is_us": False},

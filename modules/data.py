@@ -104,6 +104,22 @@ def get_naver_keywords():
     return mock_data.naver_keywords()
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_keyword_research(hint_keywords_str):
+    """키워드 도구. hint_keywords_str: 쉼표 구분 문자열."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        try:
+            result = naver_client.keyword_tool(hint_keywords_str)
+            if result is None or result.empty:
+                return mock_data.keyword_research(hint_keywords_str)
+            return result
+        except Exception as e:
+            st.sidebar.error(f"❌ Naver 키워드 도구: {str(e)[:80]}")
+            return mock_data.keyword_research(hint_keywords_str)
+    return mock_data.keyword_research(hint_keywords_str)
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def get_naver_timeseries():
     if config.has_naver_credentials():

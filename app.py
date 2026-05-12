@@ -59,7 +59,7 @@ with st.sidebar:
 
     page = st.radio(
         "페이지",
-        ["Meta", "Naver", "통합", "리포트"],
+        ["Meta", "Naver", "🔑 키워드 도구", "통합", "리포트"],
         label_visibility="collapsed"
     )
     st.divider()
@@ -874,11 +874,110 @@ def render_report_page():
         st.success("리포트 생성 완료. 다운로드를 시작합니다.")
 
 
+# ═════════════════ 키워드 도구 페이지 ═════════════════
+def render_keyword_tool_page():
+    st.title("🔑 키워드 도구")
+    st.caption("Naver 검색량·연관키워드·경쟁도 조회 — 신제품·시즌·경쟁사 키워드 추출용")
+
+    if not config.has_naver_credentials():
+        st.warning("⚠️ Naver API 키 미연결 — Mock 데이터로 표시됩니다. 사이드바에서 연결하세요.")
+
+    # 입력
+    with st.container(border=True):
+        st.markdown("**키워드 입력** (최대 5개, 쉼표 구분)")
+        c1, c2 = st.columns([4, 1])
+        hint_input = c1.text_input(
+            "키워드",
+            value=st.session_state.get("kw_input", "PDRN, 재생 크림, 시술 후 크림"),
+            label_visibility="collapsed",
+            placeholder="예: PDRN, 모공 앰플, 안티에이징"
+        )
+        search_btn = c2.button("🔍 조회", width="stretch", type="primary")
+        st.caption("💡 입력 키워드 + 연관 키워드를 함께 보여드려요. 검색량 많은 순 정렬.")
+
+    if search_btn or hint_input != st.session_state.get("kw_last_input"):
+        st.session_state["kw_input"] = hint_input
+        st.session_state["kw_last_input"] = hint_input
+
+    # 결과
+    if not hint_input.strip():
+        st.info("키워드를 입력하고 조회 버튼을 누르세요.")
+        return
+
+    with st.spinner("키워드 조회 중..."):
+        df = data.get_keyword_research(hint_input)
+
+    if df is None or df.empty:
+        st.warning("결과가 없어요. 다른 키워드로 시도해보세요.")
+        return
+
+    # 요약 통계
+    st.divider()
+    sum_pc = df["monthly_pc"].sum()
+    sum_mo = df["monthly_mo"].sum()
+    sum_total = df["monthly_total"].sum()
+    mo_ratio = (sum_mo / sum_total * 100) if sum_total else 0
+
+    sc = st.columns(4)
+    sc[0].metric("키워드 수", f"{len(df)}개")
+    sc[1].metric("총 월 검색량", f"{sum_total:,}")
+    sc[2].metric("PC 검색량", f"{sum_pc:,}")
+    sc[3].metric("모바일 비율", f"{mo_ratio:.0f}%")
+
+    # 메인 테이블
+    st.subheader("키워드 분석 결과")
+    st.dataframe(
+        df,
+        column_config={
+            "keyword": st.column_config.TextColumn("키워드", width="medium"),
+            "monthly_pc": st.column_config.NumberColumn("PC 월검색", help="PC에서 월간 검색 횟수"),
+            "monthly_mo": st.column_config.NumberColumn("모바일 월검색"),
+            "monthly_total": st.column_config.NumberColumn("총 월검색", help="PC + 모바일"),
+            "mobile_ratio": st.column_config.NumberColumn("모바일 %", format="%.0f%%"),
+            "avg_pc_clicks": st.column_config.NumberColumn("PC 평균 클릭"),
+            "avg_mo_clicks": st.column_config.NumberColumn("MO 평균 클릭"),
+            "competition": st.column_config.TextColumn("경쟁도"),
+            "avg_rank": st.column_config.NumberColumn("평균 순위", format="%.1f"),
+            "attractiveness": st.column_config.TextColumn("우리에게 매력도", width="medium"),
+        },
+        hide_index=True, width="stretch", height=420,
+    )
+
+    # 가이드
+    with st.expander("💡 키워드 도구 활용 가이드 (재근님 노하우)"):
+        st.markdown("""
+**키워드 매력도 해석**:
+- 🟢 **우리에게 유리 (롱테일)**: 검색량 적당 + 경쟁 낮음 = 적은 비용으로 1위 가능. **우선 입찰**
+- 🟡 **검토 가치**: 검색량 중간 + 경쟁 중간 = 입찰가 시뮬레이션 후 결정
+- 🔴 **빅키워드**: 검색량 ↑ 하지만 대기업과 경쟁 = 광고비 폭발. **회피 또는 콘텐츠검색광고로 우회**
+
+**모바일 비율 80% 이상**:
+- 모바일 트래픽 압도적. 모바일 입찰가 우선 ↑ + 모바일 최적화 랜딩
+
+**키워드 등록 전략 (재근님 표준)**:
+1. 🟢 매력도 키워드 → 즉시 등록 + 정확/구문 매칭
+2. 🟡 키워드 → 1주 테스트 후 결정
+3. 🔴 키워드 → 콘텐츠검색광고로 우회 또는 보류
+
+**시즌·신제품 출시 시**:
+- 신제품 핵심 키워드 + 연관 5개 정도를 1~2개월 전에 등록
+- 시즌 키워드 (예: 5월 = 선크림) 검색량 추이 매월 확인
+        """)
+
+    # 다운로드
+    csv = df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("📥 CSV 다운로드", csv,
+                       file_name=f"keyword_research_{datetime.now().strftime('%Y%m%d')}.csv",
+                       mime="text/csv")
+
+
 # ═════════════════ 라우팅 ═════════════════
 if page == "Meta":
     render_meta_page()
 elif page == "Naver":
     render_naver_page()
+elif page == "🔑 키워드 도구":
+    render_keyword_tool_page()
 elif page == "통합":
     render_integrated_page()
 elif page == "리포트":
