@@ -10,15 +10,32 @@ from . import config, mock_data
 
 
 def _try_real(real_fn, mock_fn, label):
-    """실데이터 시도 → 실패 시 Mock + 에러 표시."""
+    """실데이터 시도 → 실패 시 Mock + 에러 표시 + 상태 기록."""
+    from datetime import datetime as _dt
+    if "data_status" not in st.session_state:
+        st.session_state["data_status"] = {}
     try:
         result = real_fn()
         if result is None or (hasattr(result, "empty") and result.empty):
-            st.sidebar.warning(f"⚠️ {label}: 응답이 비어있음, Mock 사용")
+            st.session_state["data_status"][label] = {
+                "source": "mock_empty",
+                "msg": "API 응답이 비어있음",
+                "ts": _dt.now().strftime("%H:%M:%S"),
+            }
             return mock_fn()
+        st.session_state["data_status"][label] = {
+            "source": "real",
+            "msg": f"{len(result) if hasattr(result, '__len__') else 1}개 항목",
+            "ts": _dt.now().strftime("%H:%M:%S"),
+        }
         return result
     except Exception as e:
-        st.sidebar.error(f"❌ {label} API 에러: {str(e)[:100]}")
+        err_msg = str(e)[:150]
+        st.session_state["data_status"][label] = {
+            "source": "mock_error",
+            "msg": err_msg,
+            "ts": _dt.now().strftime("%H:%M:%S"),
+        }
         return mock_fn()
 
 

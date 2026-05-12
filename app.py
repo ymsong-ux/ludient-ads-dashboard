@@ -59,7 +59,7 @@ with st.sidebar:
 
     page = st.radio(
         "페이지",
-        ["Meta", "Naver", "🔑 키워드 도구", "통합", "리포트"],
+        ["Meta", "Naver", "🔑 키워드 도구", "🔬 데이터 진단", "통합", "리포트"],
         label_visibility="collapsed"
     )
     st.divider()
@@ -1251,6 +1251,166 @@ def render_search_query_report():
                        mime="text/csv", key="dl_sqr")
 
 
+# ═════════════════ 데이터 진단 페이지 ═════════════════
+def render_diagnostic_page():
+    """각 데이터 소스가 실제 API에서 왔는지 Mock 폴백인지 확인."""
+    st.title("🔬 데이터 진단")
+    st.caption("각 데이터 소스가 실제 API 응답인지 Mock 폴백인지 확인")
+
+    # 자격 정보 상태
+    src = config.data_source_status()
+    cc = st.columns(2)
+    cc[0].metric("Meta 자격 정보", src["meta"])
+    cc[1].metric("Naver 자격 정보", src["naver"])
+
+    st.divider()
+
+    # 전체 진단 실행 버튼
+    if st.button("🔄 모든 API 다시 테스트 (캐시 비우고 재호출)", type="primary", width="stretch"):
+        data.clear_cache()
+        st.session_state.pop("data_status", None)
+        st.rerun()
+
+    st.caption("💡 위 버튼 누르면 모든 캐시 비우고 각 API 다시 호출. 결과를 아래 표에 표시.")
+
+    st.divider()
+
+    # 강제로 모든 데이터 fetch 실행 (상태 채우기)
+    with st.spinner("데이터 fetch 중..."):
+        results = {}
+        try:
+            results["Meta KPI"] = ("ok", data.get_meta_kpi())
+        except Exception as e:
+            results["Meta KPI"] = ("err", str(e))
+        try:
+            results["Meta 캠페인"] = ("ok", data.get_meta_campaigns())
+        except Exception as e:
+            results["Meta 캠페인"] = ("err", str(e))
+        try:
+            results["Meta 광고세트"] = ("ok", data.get_meta_adsets())
+        except Exception as e:
+            results["Meta 광고세트"] = ("err", str(e))
+        try:
+            results["Meta 광고"] = ("ok", data.get_meta_ads())
+        except Exception as e:
+            results["Meta 광고"] = ("err", str(e))
+        try:
+            results["Naver KPI"] = ("ok", data.get_naver_kpi())
+        except Exception as e:
+            results["Naver KPI"] = ("err", str(e))
+        try:
+            results["Naver 캠페인"] = ("ok", data.get_naver_campaigns())
+        except Exception as e:
+            results["Naver 캠페인"] = ("err", str(e))
+        try:
+            results["Naver 광고그룹"] = ("ok", data.get_naver_adgroups())
+        except Exception as e:
+            results["Naver 광고그룹"] = ("err", str(e))
+        try:
+            results["Naver 키워드"] = ("ok", data.get_naver_keywords())
+        except Exception as e:
+            results["Naver 키워드"] = ("err", str(e))
+        try:
+            results["Naver 시계열"] = ("ok", data.get_naver_timeseries())
+        except Exception as e:
+            results["Naver 시계열"] = ("err", str(e))
+        try:
+            results["검색어 보고서"] = ("ok", data.get_search_query_report())
+        except Exception as e:
+            results["검색어 보고서"] = ("err", str(e))
+
+    # 진단 결과 표시
+    st.subheader("진단 결과")
+    status_dict = st.session_state.get("data_status", {})
+
+    diag_rows = []
+    for label, (state, result) in results.items():
+        s = status_dict.get(label, {})
+        source = s.get("source", "unknown")
+        msg = s.get("msg", "")
+        ts = s.get("ts", "—")
+
+        if source == "real":
+            icon = "🟢 실데이터"
+        elif source == "mock_empty":
+            icon = "🟡 Mock (응답 비어있음)"
+        elif source == "mock_error":
+            icon = "🔴 Mock (API 에러)"
+        else:
+            icon = "⚪ Mock (자격정보 없음 또는 미호출)"
+
+        # Mock 폴백인 경우 mock 함수 직접 호출되었을 수 있음
+        if source == "unknown":
+            # config 체크
+            if "Meta" in label and not config.has_meta_credentials():
+                icon = "⚪ Mock (Meta 토큰 없음)"
+            elif "Naver" in label and not config.has_naver_credentials():
+                icon = "⚪ Mock (Naver 키 없음)"
+            elif "검색어" in label and not config.has_naver_credentials():
+                icon = "⚪ Mock (Naver 키 없음)"
+
+        item_count = len(result) if hasattr(result, "__len__") else (1 if result else 0)
+        diag_rows.append({
+            "소스": label,
+            "상태": icon,
+            "항목 수": item_count,
+            "마지막 호출": ts,
+            "메시지": msg[:80] if msg else "",
+        })
+
+    df_diag = pd.DataFrame(diag_rows)
+    st.dataframe(df_diag, hide_index=True, width="stretch")
+
+    # 의미 설명
+    with st.expander("📘 상태 의미"):
+        st.markdown("""
+- **🟢 실데이터**: API 호출 성공 + 데이터 받음. 화면에 진짜 데이터 표시 중.
+- **🟡 Mock (응답 비어있음)**: API 호출 성공했지만 데이터 없음 → Mock으로 폴백
+  - 가능 원인: 광고 OFF / 기간 내 데이터 없음 / 권한 부족
+- **🔴 Mock (API 에러)**: API 호출 실패 (네트워크·인증 등) → Mock으로 폴백
+  - 가능 원인: 토큰 만료 / 권한 없음 / API 오류
+- **⚪ Mock (자격정보 없음)**: 토큰 아예 입력 안 됨 → Mock 사용
+
+→ **🟢 외의 경우는 화면에 보이는 데이터가 가짜**예요.
+        """)
+
+    # 검색어 보고서 응답 샘플 (실데이터 디버깅용)
+    if config.has_naver_credentials():
+        with st.expander("🔍 Naver API 응답 샘플 (실데이터 디버깅)"):
+            st.markdown("**비즈머니 잔액 직접 호출**")
+            try:
+                from modules import naver_client
+                balance = naver_client.fetch_bizmoney()
+                st.success(f"잔액: ₩{balance:,}")
+            except Exception as e:
+                st.error(f"호출 실패: {e}")
+
+            st.markdown("**캠페인 원시 데이터**")
+            try:
+                from modules import naver_client
+                raw = naver_client.fetch_campaigns_raw()
+                st.write(f"캠페인 수: {len(raw)}")
+                if raw:
+                    st.json(raw[0] if isinstance(raw, list) else raw)
+            except Exception as e:
+                st.error(f"호출 실패: {e}")
+
+    # 액션 로그
+    if st.session_state.get("action_log"):
+        st.divider()
+        st.subheader(f"📜 액션 실행 로그 ({len(st.session_state['action_log'])}건)")
+        for entry in st.session_state["action_log"][:20]:
+            icon = "➕" if entry["type"] == "ADD_KEYWORD" else "🚫"
+            payload = entry["payload"]
+            success = "✅" if entry["result"].get("success") else "❌"
+            mock_tag = " [Mock]" if entry["result"].get("mock") else ""
+            st.caption(
+                f"`{entry['ts']}` {icon} {success}{mock_tag} "
+                f"**{payload.get('search_query', '?')}** "
+                f"→ {payload.get('adgroup_id', '?')}"
+            )
+
+
 # ═════════════════ 라우팅 ═════════════════
 if page == "Meta":
     render_meta_page()
@@ -1258,6 +1418,8 @@ elif page == "Naver":
     render_naver_page()
 elif page == "🔑 키워드 도구":
     render_keyword_tool_page()
+elif page == "🔬 데이터 진단":
+    render_diagnostic_page()
 elif page == "통합":
     render_integrated_page()
 elif page == "리포트":
