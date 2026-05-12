@@ -331,6 +331,116 @@ def fetch_kpi(days=7):
     }
 
 
+def fetch_search_query_report(days=7, max_wait=30):
+    """검색어 보고서 (실제 노출된 사용자 검색어).
+
+    Master Reports API 사용 — 비동기 작업:
+    1. POST /master-reports (작업 생성)
+    2. GET /master-reports/{id} (상태 폴링)
+    3. downloadUrl로 결과 다운로드 (TSV)
+
+    Naver Search Ads API의 master-reports는 reportTp='AD_DETAIL'로
+    키워드별 검색어 정보를 받음.
+    """
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    # 1. 보고서 생성 요청
+    try:
+        job = _call("POST", "/master-reports", json_body={
+            "reportTp": "AD_DETAIL",
+            "statDt": since,
+        })
+    except Exception as e:
+        raise NaverAPIError(f"보고서 생성 실패: {e}")
+
+    report_id = (job or {}).get("id")
+    if not report_id:
+        raise NaverAPIError("보고서 ID 없음")
+
+    # 2. 완료 대기 (폴링)
+    for _ in range(max_wait):
+        time.sleep(1)
+        try:
+            status_resp = _call("GET", f"/master-reports/{report_id}")
+        except Exception:
+            continue
+        status = (status_resp or {}).get("status")
+        if status == "BUILT" or status == "DONE":
+            download_url = status_resp.get("downloadUrl")
+            if not download_url:
+                raise NaverAPIError("downloadUrl 없음")
+            break
+        if status in ("FAILED", "ERROR", "REGISTERED_FAILED"):
+            raise NaverAPIError(f"보고서 생성 실패 status={status}")
+    else:
+        raise NaverAPIError("보고서 대기 시간 초과")
+
+    # 3. 파일 다운로드 (서명 별도 — token=API_KEY 헤더 필요)
+    try:
+        timestamp = str(int(time.time() * 1000))
+        headers = {
+            "X-Timestamp": timestamp,
+            "X-API-KEY": config.get_naver_api_key(),
+            "X-Customer": str(config.get_naver_customer_id()),
+            "X-Signature": _sign("GET", "/report-download", timestamp),
+        }
+        r = requests.get(download_url, headers=headers, timeout=60)
+        if r.status_code >= 400:
+            raise NaverAPIError(f"다운로드 실패 {r.status_code}")
+    except requests.RequestException as e:
+        raise NaverAPIError(f"다운로드 실패: {e}")
+
+    # 4. TSV 파싱
+    import io
+    df = pd.read_csv(io.StringIO(r.text), sep="\t")
+
+    # 컬럼 정규화 — Naver TSV의 실제 컬럼명에 따라 매핑 필요
+    # AD_DETAIL 리포트는 보통: 일자, 캠페인ID, 광고그룹ID, 키워드ID, 키워드, 검색어, 노출수, 클릭수, 비용, 전환수, 전환매출
+    column_map = {
+        "키워드": "our_keyword",
+        "검색어": "search_query",
+        "노출수": "impressions",
+        "클릭수": "clicks",
+        "비용": "spend",
+        "전환수": "purchases",
+        "전환매출": "conv_value",
+    }
+    df = df.rename(columns=column_map)
+
+    if "search_query" not in df.columns:
+        # 컬럼명이 다르면 일단 그대로 반환
+        return df
+
+    # 진단 로직
+    def _diagnose(row):
+        clk = row.get("clicks", 0) or 0
+        purchases = row.get("purchases", 0) or 0
+        spend = row.get("spend", 0) or 0
+        if clk == 0:
+            return ("관찰", "🟡 노출만")
+        cvr = (purchases / clk * 100) if clk else 0
+        if purchases >= 1 and cvr >= 5:
+            return ("신규 등록 권장", "🟢")
+        if purchases == 0 and clk >= 5 and spend >= 5000:
+            return ("노출 제외 권장", "🔴")
+        if purchases >= 1:
+            return ("관찰", "🟢")
+        return ("관찰", "🟡")
+
+    diags = df.apply(_diagnose, axis=1)
+    df["status"] = [d[0] for d in diags]
+    df["diag_color"] = [d[1] for d in diags]
+    df["ctr"] = (df["clicks"] / df["impressions"] * 100).fillna(0)
+    df["cvr"] = (df["purchases"] / df["clicks"] * 100).fillna(0)
+    df["cpa"] = df.apply(
+        lambda r: (r["spend"] / r["purchases"]) if r["purchases"] else None, axis=1
+    )
+
+    return df.sort_values(
+        ["purchases", "clicks", "impressions"], ascending=[False, False, False]
+    ).reset_index(drop=True)
+
+
 def keyword_tool(hint_keywords, include_hints=True):
     """네이버 키워드 도구 API.
 

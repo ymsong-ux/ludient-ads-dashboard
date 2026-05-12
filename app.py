@@ -874,13 +874,26 @@ def render_report_page():
         st.success("리포트 생성 완료. 다운로드를 시작합니다.")
 
 
-# ═════════════════ 키워드 도구 페이지 ═════════════════
+# ═════════════════ 키워드 센터 페이지 ═════════════════
 def render_keyword_tool_page():
-    st.title("🔑 키워드 도구")
-    st.caption("Naver 검색량·연관키워드·경쟁도 조회 — 신제품·시즌·경쟁사 키워드 추출용")
+    st.title("🔑 키워드 센터")
+    st.caption("키워드 발굴·검증·관리 — 재근님 매일 작업 자동화")
 
     if not config.has_naver_credentials():
         st.warning("⚠️ Naver API 키 미연결 — Mock 데이터로 표시됩니다. 사이드바에서 연결하세요.")
+
+    t1, t2 = st.tabs(["📊 검색량 조회 (외부 키워드)", "🔍 검색어 보고서 (우리 광고 노출 실제 검색어)"])
+
+    with t2:
+        render_search_query_report()
+
+    with t1:
+        render_keyword_volume_lookup()
+
+
+def render_keyword_volume_lookup():
+    """검색량 조회 (외부 키워드)."""
+    st.caption("키워드 입력 → 월 검색량 / 평균 CPC / 경쟁도 + 연관 키워드 조회")
 
     # 입력
     with st.container(border=True):
@@ -998,7 +1011,146 @@ def render_keyword_tool_page():
     csv = df.to_csv(index=False).encode("utf-8-sig")
     st.download_button("📥 CSV 다운로드", csv,
                        file_name=f"keyword_research_{datetime.now().strftime('%Y%m%d')}.csv",
-                       mime="text/csv")
+                       mime="text/csv", key="dl_kw_volume")
+
+
+# ═════════════════ 검색어 보고서 (Search Query Report) ═════════════════
+def render_search_query_report():
+    """우리 키워드에 실제로 노출된 사용자 검색어 분석."""
+    st.caption("우리 광고에 노출된 **실제 사용자 검색어** — 신규 키워드 발굴 + 노출 제외 키워드 식별")
+
+    with st.container(border=True):
+        c1, c2 = st.columns([3, 1])
+        days = c1.selectbox("기간", [7, 14, 30], format_func=lambda d: f"최근 {d}일", index=0, key="sqr_days")
+        refresh = c2.button("🔄 갱신", width="stretch", key="sqr_refresh")
+        if refresh:
+            data.clear_cache()
+            st.rerun()
+        st.caption("💡 검색어 보고서는 우리 키워드 + 사용자가 실제 입력한 검색어 페어를 보여줘요. "
+                   "이 안에 **숨은 신규 키워드 + 광고비 새는 키워드**가 있어요.")
+
+    with st.spinner("검색어 보고서 조회 중..."):
+        df = data.get_search_query_report(days=days)
+
+    if df is None or df.empty:
+        st.warning("검색어 데이터가 없어요. 광고가 OFF 상태이거나 기간을 늘려보세요.")
+        return
+
+    # 요약
+    st.divider()
+    total_q = len(df)
+    new_count = (df["status"] == "신규 등록 권장").sum()
+    block_count = (df["status"] == "노출 제외 권장").sum()
+    total_purchases = df["purchases"].sum()
+
+    sc = st.columns(4)
+    sc[0].metric("총 검색어", f"{total_q}개")
+    sc[1].metric("🟢 신규 등록 권장", f"{new_count}개")
+    sc[2].metric("🔴 노출 제외 권장", f"{block_count}개")
+    sc[3].metric("총 구매", f"{total_purchases}건")
+
+    # 필터
+    st.subheader("검색어 분석")
+    fc1, fc2 = st.columns([1, 3])
+    filter_status = fc1.selectbox(
+        "필터",
+        ["전체", "🟢 신규 등록 권장", "🔴 노출 제외 권장", "🟡 관찰"],
+        key="sqr_filter"
+    )
+
+    display_df = df.copy()
+    display_df["진단"] = display_df["diag_color"]
+
+    if filter_status == "🟢 신규 등록 권장":
+        display_df = display_df[display_df["status"] == "신규 등록 권장"]
+    elif filter_status == "🔴 노출 제외 권장":
+        display_df = display_df[display_df["status"] == "노출 제외 권장"]
+    elif filter_status == "🟡 관찰":
+        display_df = display_df[display_df["status"] == "관찰"]
+
+    display_df = display_df[[
+        "진단", "our_keyword", "search_query", "impressions", "clicks",
+        "ctr", "purchases", "cvr", "spend", "cpa", "status"
+    ]]
+
+    st.data_editor(
+        display_df,
+        column_config={
+            "진단": st.column_config.TextColumn("진단", width="small"),
+            "our_keyword": st.column_config.TextColumn("우리 키워드", width="medium"),
+            "search_query": st.column_config.TextColumn("실제 검색어", width="large"),
+            "impressions": st.column_config.NumberColumn("노출"),
+            "clicks": st.column_config.NumberColumn("클릭"),
+            "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
+            "purchases": st.column_config.NumberColumn("구매"),
+            "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
+            "spend": st.column_config.NumberColumn("광고비", format="₩%d"),
+            "cpa": st.column_config.NumberColumn("CPA", format="₩%d"),
+            "status": st.column_config.TextColumn("권장", width="medium"),
+        },
+        hide_index=True, width="stretch", height=460,
+        disabled=display_df.columns.tolist(),
+        key="sqr_table"
+    )
+
+    # 액션 권장 — Phase N2에서 실제 API 연결 예정
+    st.subheader("🎯 권장 액션")
+    new_kws = df[df["status"] == "신규 등록 권장"]
+    block_kws = df[df["status"] == "노출 제외 권장"]
+
+    if len(new_kws) > 0:
+        with st.expander(f"🟢 신규 키워드로 등록 권장 — {len(new_kws)}개"):
+            st.caption("아래 검색어들은 이미 우리 광고에 노출돼서 구매까지 발생한 키워드예요. 신규 키워드로 등록하면 직접 입찰 가능.")
+            for _, row in new_kws.head(10).iterrows():
+                col_a, col_b = st.columns([4, 1])
+                col_a.markdown(
+                    f"**`{row['search_query']}`** — "
+                    f"구매 {row['purchases']}건 / CVR {row['cvr']:.1f}% / CPA ₩{int(row['cpa']) if pd.notna(row['cpa']) else 0:,} "
+                    f"(우리 키워드: `{row['our_keyword']}`)"
+                )
+                if col_b.button("➕ 등록", key=f"add_kw_{_}", width="stretch", disabled=True):
+                    pass
+            st.caption("⚠️ '등록' 버튼은 Phase N2에서 API 연결 예정. 지금은 표시만.")
+
+    if len(block_kws) > 0:
+        with st.expander(f"🔴 노출 제외 권장 — {len(block_kws)}개"):
+            st.caption("클릭은 많은데 구매로 안 이어진 검색어. 의도 불일치 가능성. 노출 제외 키워드로 등록하면 광고비 절감.")
+            for _, row in block_kws.head(10).iterrows():
+                col_a, col_b = st.columns([4, 1])
+                col_a.markdown(
+                    f"**`{row['search_query']}`** — "
+                    f"클릭 {row['clicks']}회 / 구매 0건 / 광고비 ₩{int(row['spend']):,} 낭비 "
+                    f"(우리 키워드: `{row['our_keyword']}`)"
+                )
+                if col_b.button("🚫 제외", key=f"block_kw_{_}", width="stretch", disabled=True):
+                    pass
+            st.caption("⚠️ '제외' 버튼은 Phase N2에서 API 연결 예정.")
+
+    # 가이드
+    with st.expander("📘 검색어 보고서 활용 가이드"):
+        st.markdown("""
+**검색어 보고서가 특별한 이유**:
+- 외부에서 키워드 추출 (자동완성·연관·블로그·카페) = 추측
+- 검색어 보고서 = **실제 우리 광고에 노출된 검증된 의도**
+- → 즉시 활용 가능한 키워드 광맥
+
+**진단 로직**:
+- 🟢 **신규 등록 권장**: 구매 1건 이상 + CVR ≥ 5% — 효율 검증된 검색어. 직접 키워드로 등록해서 입찰가 ↑
+- 🔴 **노출 제외 권장**: 클릭 5회+ / 광고비 5,000원+ 썼는데 구매 0건 — 의도 불일치. 노출 제외 키워드로 등록
+- 🟡 **관찰**: 1~2주 더 두고 데이터 누적
+
+**활용 워크플로우 (재근님 노하우 + 일반 베스트)**:
+1. 매주 검색어 보고서 확인
+2. 🟢 신규 키워드 → 즉시 등록 (정확/구문 매칭)
+3. 🔴 제외 키워드 → 노출 제외 등록 → 광고비 즉시 절감
+4. 🟡 관찰 → 다음 주 재확인
+        """)
+
+    # 다운로드
+    csv = df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("📥 CSV 다운로드", csv,
+                       file_name=f"search_query_report_{datetime.now().strftime('%Y%m%d')}.csv",
+                       mime="text/csv", key="dl_sqr")
 
 
 # ═════════════════ 라우팅 ═════════════════

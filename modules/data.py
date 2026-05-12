@@ -105,6 +105,22 @@ def get_naver_keywords():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def get_search_query_report(days=7):
+    """검색어 보고서 (우리 광고에 노출된 실제 검색어)."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        try:
+            result = naver_client.fetch_search_query_report(days=days)
+            if result is None or result.empty:
+                return mock_data.search_query_report()
+            return result
+        except Exception as e:
+            st.sidebar.error(f"❌ 검색어 보고서: {str(e)[:80]}")
+            return mock_data.search_query_report()
+    return mock_data.search_query_report()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_keyword_research(hint_keywords_str):
     """키워드 도구. hint_keywords_str: 쉼표 구분 문자열."""
     if config.has_naver_credentials():
