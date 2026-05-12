@@ -1419,8 +1419,23 @@ def render_diagnostic_page():
                 st.code(f"timestamp: {info['timestamp']}\n"
                         f"method: {info['method']}\n"
                         f"uri: {info['uri']}\n"
-                        f"signed message: {info['message_to_sign']}\n"
-                        f"signature: {info['signature']}", language="text")
+                        f"signed message: {info['message_to_sign']}\n\n"
+                        f"signature (UTF-8 방식): {info['signature_utf8']}\n"
+                        f"signature (base64 decoded): {info['signature_b64decoded']}",
+                        language="text")
+
+            st.divider()
+            st.markdown("**🔬 두 가지 서명 방식 실제 테스트**")
+            if st.button("base64-decoded 방식으로 테스트 호출", key="test_alt_sign"):
+                with st.spinner("API 호출 중..."):
+                    alt_result = naver_client.test_call_with_alt_signing()
+                if alt_result.get("success"):
+                    st.success(f"✅ base64-decoded 방식 성공! status={alt_result['status']}")
+                    st.code(alt_result["response"])
+                    st.warning("🔧 이 방식이 작동! 코드 수정해서 기본 서명 방식을 base64-decoded로 바꿔야 함.")
+                else:
+                    st.error(f"❌ base64-decoded 방식도 실패: status={alt_result.get('status')} / {alt_result.get('error', '')}")
+                    st.code(alt_result.get("response", ""))
 
             st.divider()
             st.markdown("**기대 키 형식 (Naver 광고주센터 기준)**")

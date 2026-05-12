@@ -85,6 +85,19 @@ def fetch_bizmoney():
     return 0
 
 
+def _sign_b64_decoded(method, uri, timestamp_ms):
+    """대체 서명 방식: secret key를 base64 디코드해서 사용."""
+    secret = config.get_naver_secret_key()
+    try:
+        secret_bytes = base64.b64decode(secret)
+    except Exception:
+        return None
+    message = f"{timestamp_ms}.{method}.{uri}"
+    return base64.b64encode(
+        hmac.new(secret_bytes, message.encode("utf-8"), hashlib.sha256).digest()
+    ).decode("utf-8")
+
+
 def debug_signature(method="GET", uri="/ncc/campaigns"):
     """서명 디버깅용 — 실제 호출 없이 서명 정보만 반환."""
     timestamp = str(int(time.time() * 1000))
@@ -94,6 +107,7 @@ def debug_signature(method="GET", uri="/ncc/campaigns"):
 
     message = f"{timestamp}.{method}.{uri}"
     signature = _sign(method, uri, timestamp)
+    signature_alt = _sign_b64_decoded(method, uri, timestamp)
 
     return {
         "timestamp": timestamp,
@@ -106,8 +120,34 @@ def debug_signature(method="GET", uri="/ncc/campaigns"):
         "api_key_length": len(api_key) if api_key else 0,
         "api_key_preview": f"{api_key[:12]}...{api_key[-8:]}" if api_key and len(api_key) > 20 else "(짧음)",
         "customer_id": customer,
-        "signature": signature,
+        "signature_utf8": signature,
+        "signature_b64decoded": signature_alt,
     }
+
+
+def test_call_with_alt_signing(method="GET", uri="/billing/bizmoney"):
+    """대체 서명(base64-decoded)으로 실제 API 호출 시도."""
+    timestamp = str(int(time.time() * 1000))
+    signature = _sign_b64_decoded(method, uri, timestamp)
+    if not signature:
+        return {"success": False, "error": "base64 디코드 실패"}
+
+    headers = {
+        "X-Timestamp": timestamp,
+        "X-API-KEY": config.get_naver_api_key(),
+        "X-Customer": str(config.get_naver_customer_id()),
+        "X-Signature": signature,
+        "Content-Type": "application/json; charset=UTF-8",
+    }
+    try:
+        r = requests.get(BASE + uri, headers=headers, timeout=15)
+        return {
+            "status": r.status_code,
+            "success": r.status_code < 400,
+            "response": r.text[:300],
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def fetch_campaigns_raw():
