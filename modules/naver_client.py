@@ -267,6 +267,7 @@ def fetch_adgroups(days=30):
         status, color = _diagnose_keyword(ctr, cvr, conv, 4)
 
         rows.append({
+            "id": gid,
             "campaign_id": g.get("_campaign_id"),
             "active": g.get("status") in ("ELIGIBLE", "EXAMINING"),
             "name": g.get("name"),
@@ -330,6 +331,7 @@ def fetch_keywords(days=30):
         status, color = _diagnose_keyword(ctr, cvr, conv, quality)
 
         rows.append({
+            "id": kid,
             "active": k.get("status") in ("ELIGIBLE", "EXAMINING"),
             "keyword": k.get("keyword"),
             "match": "구문",  # API에 매칭 타입 별도 정보 없음 — 기본값
@@ -457,6 +459,28 @@ def update_keyword_bid(keyword_id, bid_amt):
         return {"success": True, "data": result}
     except NaverAPIError as e:
         return {"success": False, "error": str(e)}
+
+
+def update_adgroup_bid(adgroup_id, bid_amt):
+    """광고그룹 기본 입찰가 변경. PUT /ncc/adgroups/{id}."""
+    try:
+        result = _call("PUT", f"/ncc/adgroups/{adgroup_id}",
+                       json_body={"bidAmt": int(bid_amt)})
+        return {"success": True, "data": result}
+    except NaverAPIError as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_bid_estimate(keyword, device="PC"):
+    """키워드 노출 순위별 예상 입찰가. POST /estimate/average-position-bid."""
+    try:
+        result = _call("POST", "/estimate/average-position-bid", json_body={
+            "device": device,
+            "items": [{"keyword": keyword, "position": p} for p in [1, 2, 3, 5]]
+        })
+        return result
+    except NaverAPIError:
+        return None
 
 
 def fetch_search_query_report(days=7, max_wait=30):

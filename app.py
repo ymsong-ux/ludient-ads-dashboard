@@ -753,6 +753,9 @@ def render_naver_page():
     - **CVR 0% + 노출 多** → 즉시 OFF 또는 키워드 자체 부적합
                     """)
 
+                # ───────── 입찰가 조정 (N4) ─────────
+                render_bid_adjustment(nkeywords, nadgroups)
+
             st.divider()
 
             # 키워드 기회 + 검색 트렌드 (탭 밖, 항상 보임)
@@ -1249,6 +1252,230 @@ def render_search_query_report():
     st.download_button("📥 CSV 다운로드", csv,
                        file_name=f"search_query_report_{datetime.now().strftime('%Y%m%d')}.csv",
                        mime="text/csv", key="dl_sqr")
+
+
+# ═════════════════ 입찰가 조정 (N4) ═════════════════
+def render_bid_adjustment(keywords_df, adgroups_df):
+    """키워드·광고그룹 입찰가 조정 UI. Naver SA 키워드 탭에 임베드."""
+    st.divider()
+    st.subheader("💰 입찰가 조정")
+    st.caption("키워드 또는 광고그룹의 입찰가를 변경 — 1~3위 순위 조절 + CPC 최적화")
+
+    target = st.radio("대상", ["키워드", "광고그룹"], horizontal=True, key="bid_target")
+
+    if target == "키워드":
+        if keywords_df.empty:
+            st.info("키워드 데이터 없음")
+            return
+
+        # 키워드 선택
+        kw_options = [f"{r['keyword']} (현재 ₩{int(r['bid']):,})" for _, r in keywords_df.iterrows()]
+        sel_idx = st.selectbox(
+            "키워드 선택",
+            range(len(kw_options)),
+            format_func=lambda i: kw_options[i],
+            key="bid_kw_sel"
+        )
+        kw_row = keywords_df.iloc[sel_idx]
+        target_id = kw_row.get("id", "")
+        keyword_name = kw_row["keyword"]
+        current_bid = int(kw_row["bid"])
+
+        c1, c2 = st.columns(2)
+        c1.metric("현재 입찰가", f"₩{current_bid:,}")
+        c1.metric("현재 평균 순위", f"{kw_row['rank_avg']:.1f}등" if kw_row.get('rank_avg') else "—")
+        c1.metric("품질지수", f"{int(kw_row['quality'])}단계" if kw_row.get('quality') else "—")
+
+        # 순위별 예상 입찰가
+        with c2:
+            st.markdown("**📊 순위별 예상 입찰가** (Naver 추정)")
+            if st.button("예상 입찰가 조회", key="bid_estimate_btn", width="stretch"):
+                estimate = data.get_bid_estimate(keyword_name, device="PC")
+                if estimate:
+                    items = estimate.get("estimate", [])
+                    for item in items:
+                        pos = item.get("position", "?")
+                        bid = item.get("bid", 0)
+                        st.write(f"- **{pos}위** ≈ ₩{int(bid):,}")
+                    if estimate.get("mock"):
+                        st.caption("⚠️ Mock 추정 (Naver API 미사용)")
+
+        st.divider()
+
+        # 새 입찰가 입력
+        st.markdown("**새 입찰가 설정**")
+        qc1, qc2, qc3, qc4 = st.columns(4)
+        if qc1.button("-20%", width="stretch", key="bid_minus20"):
+            st.session_state["new_bid_kw"] = max(70, int(current_bid * 0.8))
+            st.rerun()
+        if qc2.button("-10%", width="stretch", key="bid_minus10"):
+            st.session_state["new_bid_kw"] = max(70, int(current_bid * 0.9))
+            st.rerun()
+        if qc3.button("+10%", width="stretch", key="bid_plus10"):
+            st.session_state["new_bid_kw"] = int(current_bid * 1.1)
+            st.rerun()
+        if qc4.button("+20%", width="stretch", key="bid_plus20"):
+            st.session_state["new_bid_kw"] = int(current_bid * 1.2)
+            st.rerun()
+
+        new_bid = st.number_input(
+            "직접 입력 (원)",
+            min_value=70,
+            max_value=100_000,
+            value=st.session_state.get("new_bid_kw", current_bid),
+            step=10,
+            key="new_bid_kw_input"
+        )
+
+        # 변경 표시
+        delta = new_bid - current_bid
+        delta_pct = (delta / current_bid * 100) if current_bid else 0
+        if delta > 0:
+            st.success(f"입찰가 변경: ₩{current_bid:,} → ₩{new_bid:,} ({delta_pct:+.0f}%)")
+        elif delta < 0:
+            st.warning(f"입찰가 변경: ₩{current_bid:,} → ₩{new_bid:,} ({delta_pct:+.0f}%)")
+        else:
+            st.info(f"현재 값과 동일: ₩{new_bid:,}")
+
+        if st.button("💰 입찰가 변경 실행", type="primary", disabled=(delta == 0), key="bid_execute_kw"):
+            st.session_state["pending_bid"] = {
+                "level": "keyword",
+                "target_id": target_id,
+                "target_name": keyword_name,
+                "current_bid": current_bid,
+                "new_bid": int(new_bid),
+            }
+            st.rerun()
+
+    else:  # 광고그룹
+        if adgroups_df.empty:
+            st.info("광고그룹 데이터 없음")
+            return
+
+        ag_options = [f"{r['name']} (기본 입찰 ₩{int(r['default_bid']):,})" for _, r in adgroups_df.iterrows()]
+        sel_idx = st.selectbox(
+            "광고그룹 선택",
+            range(len(ag_options)),
+            format_func=lambda i: ag_options[i],
+            key="bid_ag_sel"
+        )
+        ag_row = adgroups_df.iloc[sel_idx]
+        target_id = ag_row.get("id", "")
+        ag_name = ag_row["name"]
+        current_bid = int(ag_row["default_bid"])
+
+        st.metric("현재 기본 입찰가", f"₩{current_bid:,}")
+        st.caption(f"이 광고그룹의 키워드 중 개별 입찰가 미설정 키워드에 적용")
+
+        # 빠른 조정 + 입력
+        qc1, qc2, qc3, qc4 = st.columns(4)
+        if qc1.button("-20%", width="stretch", key="bid_ag_m20"):
+            st.session_state["new_bid_ag"] = max(70, int(current_bid * 0.8))
+            st.rerun()
+        if qc2.button("-10%", width="stretch", key="bid_ag_m10"):
+            st.session_state["new_bid_ag"] = max(70, int(current_bid * 0.9))
+            st.rerun()
+        if qc3.button("+10%", width="stretch", key="bid_ag_p10"):
+            st.session_state["new_bid_ag"] = int(current_bid * 1.1)
+            st.rerun()
+        if qc4.button("+20%", width="stretch", key="bid_ag_p20"):
+            st.session_state["new_bid_ag"] = int(current_bid * 1.2)
+            st.rerun()
+
+        new_bid = st.number_input(
+            "직접 입력 (원)",
+            min_value=70,
+            max_value=100_000,
+            value=st.session_state.get("new_bid_ag", current_bid),
+            step=10,
+            key="new_bid_ag_input"
+        )
+
+        delta = new_bid - current_bid
+        delta_pct = (delta / current_bid * 100) if current_bid else 0
+        if delta > 0:
+            st.success(f"입찰가 변경: ₩{current_bid:,} → ₩{new_bid:,} ({delta_pct:+.0f}%)")
+        elif delta < 0:
+            st.warning(f"입찰가 변경: ₩{current_bid:,} → ₩{new_bid:,} ({delta_pct:+.0f}%)")
+        else:
+            st.info(f"현재 값과 동일: ₩{new_bid:,}")
+
+        if st.button("💰 입찰가 변경 실행", type="primary", disabled=(delta == 0), key="bid_execute_ag"):
+            st.session_state["pending_bid"] = {
+                "level": "adgroup",
+                "target_id": target_id,
+                "target_name": ag_name,
+                "current_bid": current_bid,
+                "new_bid": int(new_bid),
+            }
+            st.rerun()
+
+    # 확인 모달
+    if st.session_state.get("pending_bid"):
+        @st.dialog("입찰가 변경 확인", width="large")
+        def confirm_bid():
+            p = st.session_state["pending_bid"]
+            level_kr = "키워드" if p["level"] == "keyword" else "광고그룹 기본"
+
+            st.markdown(f"### {level_kr} 입찰가를 변경할까요?")
+            st.markdown(f"- **대상**: `{p['target_name']}`")
+            st.markdown(f"- **변경 전**: ₩{p['current_bid']:,}")
+            st.markdown(f"- **변경 후**: ₩{p['new_bid']:,}")
+            change = p["new_bid"] - p["current_bid"]
+            pct = (change / p["current_bid"] * 100) if p["current_bid"] else 0
+            if change > 0:
+                st.markdown(f"- **변동**: 🔼 +₩{change:,} ({pct:+.0f}%)")
+            else:
+                st.markdown(f"- **변동**: 🔽 {change:,}원 ({pct:+.0f}%)")
+            st.divider()
+
+            st.warning("⚠️ 실행 시 Naver 광고에 즉시 반영. 입찰가 ↑면 광고비 증가 가능.")
+
+            c1, c2 = st.columns(2)
+            if c1.button("✅ 변경 실행", type="primary", width="stretch"):
+                with st.spinner("입찰가 변경 중..."):
+                    if p["level"] == "keyword":
+                        result = data.execute_update_keyword_bid(p["target_id"], p["new_bid"])
+                    else:
+                        result = data.execute_update_adgroup_bid(p["target_id"], p["new_bid"])
+                    data.log_action(f"UPDATE_BID_{p['level'].upper()}", p, result)
+                if result.get("success"):
+                    msg = f"입찰가 변경 완료: ₩{p['current_bid']:,} → ₩{p['new_bid']:,}"
+                    if result.get("mock"):
+                        msg += " (Mock 모드)"
+                    st.success(msg)
+                    data.clear_cache()
+                else:
+                    st.error(f"실패: {result.get('error', '?')}")
+                st.session_state.pop("pending_bid", None)
+                st.session_state.pop("new_bid_kw", None)
+                st.session_state.pop("new_bid_ag", None)
+                st.rerun()
+            if c2.button("취소", width="stretch"):
+                st.session_state.pop("pending_bid", None)
+                st.rerun()
+        confirm_bid()
+
+    with st.expander("📘 입찰가 조정 가이드"):
+        st.markdown("""
+**언제 ↑ (인상)?**
+- ROAS 좋은데 노출 부족 → 순위 올려서 더 많이 노출
+- 평균 순위 5등 이하 + 효율 좋음 → 1~3위 진입 시도
+- CTR > 3% + CVR 좋음 → 입찰가 ↑ 안전
+
+**언제 ↓ (인하)?**
+- CPC 과도 상승 → 빅키워드 경쟁 회피
+- 노출은 많은데 ROAS 미달 → 비용 절감
+- 학습 단계 후 효율 떨어짐 → 일단 ↓ 후 관찰
+
+**단계별 권장 조정폭**:
+- 보수: ±10% (안정적 운영)
+- 적극: ±20% (효율 검증 후)
+- 즉각: 70원 = 최소 입찰가 (사실상 일시 정지 효과)
+
+**재근님 표준 (인수인계)**:
+- "1~3위 조절" 명시 — 키워드별 CPC 단가가 다름. 순위 목표로 입찰가 정함.
+        """)
 
 
 # ═════════════════ 데이터 진단 페이지 ═════════════════

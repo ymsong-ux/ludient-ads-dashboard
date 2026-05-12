@@ -281,6 +281,7 @@ def naver_adgroups():
             "clicks", "ctr", "conversions", "cvr", "status", "diag_color"]
     df = pd.DataFrame(rows, columns=cols)
     df.insert(0, "active", True)
+    df.insert(0, "id", [f"nag-mock-{i:03d}" for i in range(len(df))])
     return df
 
 
@@ -313,6 +314,7 @@ def naver_kpi():
 
 
 def naver_keywords():
+    """Mock 키워드 데이터. 실데이터에는 nccKeywordId 포함됨."""
     rows = [
         ("PDRN 크림", "구문", 1500, 8000, 4200, 84, 2.0, 5, 5.95, 2.8, 5, "유지", "🟢"),
         ("시술 후 크림", "구문", 800, 3000, 1800, 38, 2.1, 4, 10.5, 1.5, 6, "증액 권장", "🟢"),
@@ -339,6 +341,7 @@ def naver_keywords():
             "ctr", "purchases", "cvr", "rank_avg", "quality", "status", "diag_color"]
     df = pd.DataFrame(rows, columns=cols)
     df.insert(0, "active", True)
+    df.insert(0, "id", [f"nkw-mock-{i:03d}" for i in range(len(df))])
     return df
 
 

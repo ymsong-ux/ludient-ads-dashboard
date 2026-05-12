@@ -224,6 +224,39 @@ def execute_block_keyword(adgroup_id, keyword):
     return {"success": True, "mock": True}
 
 
+def execute_update_keyword_bid(keyword_id, new_bid):
+    """키워드 입찰가 변경."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        return naver_client.update_keyword_bid(keyword_id, new_bid)
+    return {"success": True, "mock": True, "new_bid": new_bid}
+
+
+def execute_update_adgroup_bid(adgroup_id, new_bid):
+    """광고그룹 기본 입찰가 변경."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        return naver_client.update_adgroup_bid(adgroup_id, new_bid)
+    return {"success": True, "mock": True, "new_bid": new_bid}
+
+
+def get_bid_estimate(keyword, device="PC"):
+    """키워드 순위별 예상 입찰가."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        return naver_client.get_bid_estimate(keyword, device)
+    # Mock fallback — 가상 예상치
+    return {
+        "estimate": [
+            {"keyword": keyword, "device": device, "position": 1, "bid": 2500},
+            {"keyword": keyword, "device": device, "position": 2, "bid": 1800},
+            {"keyword": keyword, "device": device, "position": 3, "bid": 1300},
+            {"keyword": keyword, "device": device, "position": 5, "bid": 900},
+        ],
+        "mock": True,
+    }
+
+
 def log_action(action_type, payload, result):
     """감사용 로그를 session_state에 저장."""
     from datetime import datetime as _dt
