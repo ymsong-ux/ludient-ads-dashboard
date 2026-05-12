@@ -10,7 +10,6 @@ import plotly.express as px
 import pandas as pd
 from datetime import datetime
 
-from modules import mock_data as mock
 from modules import data, config, alerts
 
 
@@ -162,9 +161,17 @@ def render_action_card(action, key_prefix):
 # ═════════════════ META 페이지 ═════════════════
 def render_meta_page():
     st.title("Meta 광고")
-    st.caption("Ludient 계정 · 페이스북·인스타그램 광고 · 4월 데이터 · % = 직전 30일 대비 증감")
+    st.caption("Ludient 계정 · 페이스북·인스타그램 광고 · % = 직전 30일 대비 증감")
+
+    if not config.has_meta_credentials():
+        st.warning("🔌 **Meta API 토큰 미연결** — 사이드바에서 Access Token + 광고 계정 ID 입력 후 '연결' 클릭.")
+        st.info("토큰 발급: developers.facebook.com/tools/explorer/ (ads_read 권한)")
+        return
 
     kpi = data.get_meta_kpi()
+    if kpi is None:
+        st.error("❌ Meta API 호출 실패. 토큰 만료 또는 권한 부족 가능. 사이드바에서 다시 연결.")
+        return
 
     # 운영 상태 알림
     if kpi.get("운영_상태"):
@@ -391,16 +398,24 @@ def render_meta_page():
 
     with action_col:
         st.markdown("### 🔔 오늘 추천 액션")
-        st.caption("본인이 검토 후 실행")
-
-        for action in data.get_meta_actions():
-            render_action_card(action, "meta")
+        meta_actions = data.get_meta_actions()
+        if not meta_actions:
+            st.caption("진단 엔진 + 추천 로직 추후 구현. 현재는 데이터 진단 페이지(🔬) 참조.")
+        else:
+            st.caption("본인이 검토 후 실행")
+            for action in meta_actions:
+                render_action_card(action, "meta")
 
 
 # ═════════════════ NAVER 페이지 ═════════════════
 def render_naver_page():
     st.title("Naver 광고")
-    st.caption("루디언트 계정 · 검색광고 + GFA + 브랜드검색 + 쇼핑검색")
+    st.caption("루디언트 계정 · 검색광고 (SA API 실데이터)")
+
+    if not config.has_naver_credentials():
+        st.warning("🔌 **Naver API 키 미연결** — 사이드바에서 API Key + Secret Key + Customer ID 입력 후 '연결' 클릭.")
+        st.info("키 발급: searchad.naver.com → 도구 → SA API 사용 관리")
+        return
 
     # 회사 ON/OFF 기준 알림
     with st.expander("📐 회사 ON/OFF 기준 (재근님 인수인계 기준)"):
@@ -420,128 +435,32 @@ def render_naver_page():
 
     # ─────────────── GFA 탭 ───────────────
     with n_gfa:
-        gfa = data.get_gfa_kpi()
-        if gfa.get("운영_상태"):
-            st.warning(f"**운영 상태**: {gfa['운영_상태']}")
-        st.caption(f"성과형 디스플레이 광고 · 목표 ROAS {gfa['목표_roas']}%")
-
-        gc = st.columns(5)
-        gc[0].metric("광고비 (30일)", format_won(gfa["광고비_30일"]), f"{gfa['광고비_증감']:+.1f}%")
-        gc[1].metric("매출 (30일)", format_won(gfa["매출_30일"]), f"{gfa['매출_증감']:+.1f}%")
-        gc[2].metric("ROAS", f"{gfa['roas']}%", f"{gfa['roas_증감']:+}%p")
-        gc[3].metric("CPA", format_won(gfa["cpa"]), f"{gfa['cpa_증감']:+.1f}%", delta_color="inverse")
-        gc[4].metric("전환", f"{gfa['전환']}건", f"{gfa['전환_증감']:+}")
-
-        st.subheader("GFA 캠페인 4종")
-        gfa_df = data.get_gfa_campaigns()
-        gfa_df["진단"] = gfa_df["diag_color"]
-        gfa_df["ON/OFF"] = gfa_df["active"]
-        gfa_view = gfa_df[["진단", "ON/OFF", "name", "type", "daily_budget",
-                           "spend", "conversions", "cpa", "roas", "ctr", "cvr", "status"]]
-        st.data_editor(
-            gfa_view,
-            column_config={
-                "진단": st.column_config.TextColumn("진단", width="small"),
-                "ON/OFF": st.column_config.CheckboxColumn("ON/OFF"),
-                "name": st.column_config.TextColumn("캠페인", width="large"),
-                "type": st.column_config.TextColumn("유형"),
-                "daily_budget": st.column_config.NumberColumn("일예산", format="₩%d"),
-                "spend": st.column_config.NumberColumn("지출", format="₩%d"),
-                "conversions": st.column_config.NumberColumn("전환"),
-                "cpa": st.column_config.NumberColumn("CPA", format="₩%d"),
-                "roas": st.column_config.NumberColumn("ROAS", format="%d%%"),
-                "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
-                "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
-                "status": st.column_config.TextColumn("권장"),
-            },
-            hide_index=True, width="stretch", height=200,
-            disabled=["진단", "name", "type", "daily_budget", "spend",
-                      "conversions", "cpa", "roas", "ctr", "cvr", "status"],
-            key="gfa_campaigns_table"
-        )
-
-        st.subheader("🔔 GFA 추천 액션")
-        for action in data.get_gfa_actions():
-            render_action_card(action, "gfa")
-
-        with st.expander("💡 GFA 운영 인사이트"):
+        st.warning("🔌 **GFA API 미발급** — 광고주센터 셀프서비스 발급 불가. Naver 영업팀 별도 신청 필요.")
+        st.info("신청 절차는 'GFA_API_도입_검토.pdf' 참고. 발급 후 GFA 전용 키 입력란 추가 예정.")
+        with st.expander("💡 GFA 현재 상태 (참고)"):
             st.markdown("""
-- **재근님 인수인계**: GFA가 Meta보다 성과 좋은 편 (목표 ROAS 200~300%)
-- **현재 OFF**: 5/6부터 뉴욕 팝업 준비로 재고 부족 → 전면 중단
-- **재개 시 우선순위**: ADVoost 쇼핑(전환) → 카탈로그 판매 → 웹사이트 전환 → 인지도/트래픽
-- **전환 추적**: 스마트스토어 추적코드 연동 / 자사몰 픽셀
-- **재고 회복 시점**: 즉시 재개 검토. Meta보다 GFA 비중 ↑ 권장
-            """)
+- 4개 캠페인 운영 이력 — ADVoost 쇼핑·웹사이트 전환·인지도/트래픽·카탈로그 판매
+- 5/6부터 OFF (뉴욕 팝업 재고 부족)
+- 재근님 인수인계: GFA가 Meta보다 성과 좋은 편 (목표 ROAS 200~300%)
+- 재고 회복 시점에 GFA API 발급 + 도구 연결 권장
+""")
 
     # ─────────────── 브랜드검색 탭 ───────────────
     with n_brand:
-        brand = data.get_naver_brand_search()
-        st.success(f"**계약**: {brand['계약기간']}")
-        st.caption("브랜드명 검색 시 단독 노출 · 월 계약형 (조회수 ↑ → 광고비 ↑)")
-
-        bc = st.columns(5)
-        bc[0].metric("월 비용 (총)", format_won(brand["총_월비용"]))
-        bc[1].metric("PC", format_won(brand["PC_월비용"]))
-        bc[2].metric("MO", format_won(brand["MO_월비용"]))
-        bc[3].metric("CTR", f"{brand['ctr']}%")
-        bc[4].metric("CVR", f"{brand['cvr']}%")
-
-        st.subheader("방어 키워드")
-        st.write(" · ".join([f"`{k}`" for k in brand["방어_키워드"]]))
-
-        bc2 = st.columns(2)
-        bc2[0].metric("노출 (월)", f"{brand['노출']:,}")
-        bc2[1].metric("클릭", f"{brand['클릭']:,}")
-        bc2[0].metric("전환", f"{brand['전환']}건")
-
-        with st.expander("💡 브랜드검색 운영 가이드"):
+        st.warning("🔌 **브랜드검색 별도 API 없음** — 월 계약형 광고라 API 미지원.")
+        st.info("현재 계약 정보 + 결제 일정은 알림 페이지(🔔)에서 매월 15일 자동 알림.")
+        with st.expander("💡 브랜드검색 현황 (참고)"):
             st.markdown("""
-- **운영 목적**:
-  - 브랜드 신뢰 확보
-  - 브랜드 키워드 점유 (경쟁사 침투 방지)
-  - 신제품·이벤트 진행 시 노출
-- **관리 항목**:
-  - 모바일/PC 문구 + 이미지 점검
-  - 링크 정상 연결 확인
-  - 브랜드 검색량 증가 여부 추적
-- **결제**: 법인카드 수령 → 페이북 결제 → 최도현 팀장님 요청 → 충전 → 전자결제
-- **갱신 검토**: 5/18 계약 종료 전 갱신 여부 결정
-            """)
+- PC 682,000원 + MO 902,000원 = 158만/월
+- 현재 계약: 2026.04.17 ~ 2026.05.18
+- 매월 15일 갱신 검토 (브랜드 검색량 ↑면 광고비 ↑)
+- 결제: 법인카드 → 페이북 (최도현 팀장님) → 충전 → 전자결재
+""")
 
     # ─────────────── 쇼핑검색 탭 ───────────────
     with n_shop:
-        st.caption("네이버 쇼핑탭 노출 · 공식몰+스마트스토어 등록 가능")
-
-        shop_df = data.get_naver_shopping()
-        shop_df["진단"] = shop_df["diag_color"]
-        shop_view = shop_df[["진단", "product", "impressions", "clicks", "ctr",
-                              "purchases", "cvr", "cpc", "spend", "status"]]
-        st.data_editor(
-            shop_view,
-            column_config={
-                "진단": st.column_config.TextColumn("진단", width="small"),
-                "product": st.column_config.TextColumn("제품", width="medium"),
-                "impressions": st.column_config.NumberColumn("노출"),
-                "clicks": st.column_config.NumberColumn("클릭"),
-                "ctr": st.column_config.NumberColumn("CTR", format="%.2f%%"),
-                "purchases": st.column_config.NumberColumn("구매"),
-                "cvr": st.column_config.NumberColumn("CVR", format="%.2f%%"),
-                "cpc": st.column_config.NumberColumn("CPC", format="₩%d"),
-                "spend": st.column_config.NumberColumn("지출", format="₩%d"),
-                "status": st.column_config.TextColumn("권장"),
-            },
-            hide_index=True, width="stretch", height=200,
-            disabled=["진단", "product", "impressions", "clicks", "ctr",
-                      "purchases", "cvr", "cpc", "spend", "status"],
-            key="naver_shop_table"
-        )
-
-        with st.expander("💡 쇼핑검색 운영 가이드"):
-            st.markdown("""
-- **예산 확대 운영 기준**: 노출/클릭/전환 좋음 + 리뷰 반응 좋음 + CTR 높음
-- **예산 축소 운영 기준**: 클릭만 발생, 구매 전환 0 / CPC 과도 상승
-- **관리 항목**: 경쟁사 대비 가격 / 썸네일 / 리뷰·평점·배송
-            """)
+        st.warning("🔌 **쇼핑검색은 SA API 캠페인 분류로 표시됨** — 검색광고 탭의 cmp-a001-02 캠페인이 쇼핑검색.")
+        st.info("별도 페이지보다 검색광고 탭에서 통합 관리. 추후 분리 표시 가능.")
 
     # ─────────────── 검색광고 (파워링크) 탭 ───────────────
     with n_search:
@@ -767,55 +686,27 @@ def render_naver_page():
 
             st.divider()
 
-            # 키워드 기회 + 검색 트렌드 (탭 밖, 항상 보임)
-            st.subheader("🔍 키워드 발굴·트렌드")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**신규 키워드 기회**")
-                opp = data.get_naver_keyword_opportunity()
-                st.caption("검색량 ↑ + 우리 미입찰 + USP 매칭")
-                st.dataframe(
-                    opp,
-                    column_config={
-                        "keyword": "키워드",
-                        "monthly_search": st.column_config.NumberColumn("월 검색량"),
-                        "예상_cpc": st.column_config.NumberColumn("예상 CPC", format="₩%d"),
-                        "competitive": "경쟁도",
-                        "score": st.column_config.NumberColumn("매력도", format="%.1f"),
-                    },
-                    hide_index=True,
-                    width="stretch",
-                )
+            # 키워드 발굴·트렌드·SERP — 별도 API/크롤링 필요
+            with st.expander("🔌 키워드 발굴·트렌드·경쟁사 SERP — 추후 구현"):
+                st.markdown("""
+다음 기능은 별도 API/크롤링 인프라가 필요해서 현재 미구현:
 
-            with c2:
-                st.markdown("**검색 트렌드 (90일)**")
-                st.caption("네이버 데이터랩 상대 지수")
-                trend = data.get_naver_search_trend()
-                fig = go.Figure()
-                for col in ["PDRN 크림", "재생 크림", "시술 후 크림"]:
-                    fig.add_trace(go.Scatter(x=trend["date"], y=trend[col], name=col, mode="lines"))
-                fig.update_layout(height=240, margin=dict(t=20, b=20, l=20, r=20))
-                st.plotly_chart(fig, width="stretch")
+- **신규 키워드 기회 발굴** — Naver 키워드 도구 API 자체 알고리즘 결합 필요
+- **검색 트렌드 (90일)** — 네이버 데이터랩 API 별도 발급 필요
+- **SERP 경쟁사 모니터링** — BrightData·Firecrawl 크롤링 통합 필요
 
-            st.divider()
-
-            # SERP 경쟁사
-            st.subheader('🌐 "PDRN 크림" 검색 결과 모니터링')
-            st.caption("매일 자동 SERP 캡처 — 경쟁사 광고 카피 추적")
-            comp = data.get_serp_competitors()
-            for _, row in comp.iterrows():
-                with st.container(border=True):
-                    badge = "🟦 우리" if row["is_us"] else f"#{row['rank']}"
-                    title = f"**{badge} · {row['advertiser']}** · `{row['url']}`"
-                    st.markdown(title)
-                    st.markdown(f"📝 **{row['headline']}**")
-                    st.caption(row["description"])
+→ 우선순위 정해서 추가 빌드 가능.
+                """)
 
         with action_col:
             st.markdown("### 🔔 오늘 추천 액션")
-            st.caption("본인이 검토 후 실행")
-            for action in data.get_naver_actions():
-                render_action_card(action, "naver")
+            naver_actions = data.get_naver_actions()
+            if not naver_actions:
+                st.caption("진단 엔진 + 추천 로직 추후 구현. 현재는 데이터 진단 페이지(🔬) 참조.")
+            else:
+                st.caption("본인이 검토 후 실행")
+                for action in naver_actions:
+                    render_action_card(action, "naver")
 
 
     # ═════════════════ 통합 페이지 ═════════════════
@@ -876,11 +767,12 @@ def render_report_page():
         default=["광고비", "전환", "CPA", "ROAS"]
     )
 
-    st.multiselect(
-        "포함할 캠페인",
-        mock.meta_campaigns()["name"].tolist() + ["Naver - 루디언트"],
-        default=mock.meta_campaigns()["name"].tolist()
-    )
+    meta_camps = data.get_meta_campaigns()
+    camp_options = []
+    if not meta_camps.empty:
+        camp_options = meta_camps["name"].tolist()
+    camp_options.append("Naver - 루디언트")
+    st.multiselect("포함할 캠페인", camp_options, default=camp_options)
 
     if st.button("📥 리포트 생성", type="primary", width="stretch"):
         st.success("리포트 생성 완료. 다운로드를 시작합니다.")
