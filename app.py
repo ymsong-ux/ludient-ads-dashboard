@@ -414,7 +414,7 @@ def render_naver_page():
 
     # ─────────────── GFA 탭 ───────────────
     with n_gfa:
-        gfa = mock.gfa_kpi()
+        gfa = data.get_gfa_kpi()
         if gfa.get("운영_상태"):
             st.warning(f"**운영 상태**: {gfa['운영_상태']}")
         st.caption(f"성과형 디스플레이 광고 · 목표 ROAS {gfa['목표_roas']}%")
@@ -427,7 +427,7 @@ def render_naver_page():
         gc[4].metric("전환", f"{gfa['전환']}건", f"{gfa['전환_증감']:+}")
 
         st.subheader("GFA 캠페인 4종")
-        gfa_df = mock.gfa_campaigns()
+        gfa_df = data.get_gfa_campaigns()
         gfa_df["진단"] = gfa_df["diag_color"]
         gfa_df["ON/OFF"] = gfa_df["active"]
         gfa_view = gfa_df[["진단", "ON/OFF", "name", "type", "daily_budget",
@@ -455,7 +455,7 @@ def render_naver_page():
         )
 
         st.subheader("🔔 GFA 추천 액션")
-        for action in mock.gfa_actions():
+        for action in data.get_gfa_actions():
             render_action_card(action, "gfa")
 
         with st.expander("💡 GFA 운영 인사이트"):
@@ -469,7 +469,7 @@ def render_naver_page():
 
     # ─────────────── 브랜드검색 탭 ───────────────
     with n_brand:
-        brand = mock.naver_brand_search()
+        brand = data.get_naver_brand_search()
         st.success(f"**계약**: {brand['계약기간']}")
         st.caption("브랜드명 검색 시 단독 노출 · 월 계약형 (조회수 ↑ → 광고비 ↑)")
 
@@ -506,7 +506,7 @@ def render_naver_page():
     with n_shop:
         st.caption("네이버 쇼핑탭 노출 · 공식몰+스마트스토어 등록 가능")
 
-        shop_df = mock.naver_shopping()
+        shop_df = data.get_naver_shopping()
         shop_df["진단"] = shop_df["diag_color"]
         shop_view = shop_df[["진단", "product", "impressions", "clicks", "ctr",
                               "purchases", "cvr", "cpc", "spend", "status"]]
@@ -540,7 +540,7 @@ def render_naver_page():
     # ─────────────── 검색광고 (파워링크) 탭 ───────────────
     with n_search:
 
-        kpi = mock.naver_kpi()
+        kpi = data.get_naver_kpi()
 
         cols = st.columns(6)
         cols[0].metric("노출 (7일)", f"{kpi['노출']:,}", f"{kpi['노출_증감']:+.1f}%")
@@ -557,7 +557,7 @@ def render_naver_page():
         with main_col:
             # 시계열 차트 (탭 위, 항상 보임)
             st.subheader("📈 시계열 트렌드 (30일)")
-            nts = mock.naver_timeseries()
+            nts = data.get_naver_timeseries()
             nct1, nct2 = st.tabs(["노출·클릭", "전환·광고비"])
             with nct1:
                 fig = go.Figure()
@@ -579,9 +579,9 @@ def render_naver_page():
             st.divider()
 
             st.subheader("🔬 단계별 진단")
-            ncamps = mock.naver_campaigns()
-            nadgroups = mock.naver_adgroups()
-            nkeywords = mock.naver_keywords()
+            ncamps = data.get_naver_campaigns()
+            nadgroups = data.get_naver_adgroups()
+            nkeywords = data.get_naver_keywords()
 
             ntab_camp, ntab_grp, ntab_kw = st.tabs([
                 f"📁 캠페인 ({len(ncamps)})",
@@ -760,7 +760,7 @@ def render_naver_page():
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("**신규 키워드 기회**")
-                opp = mock.naver_keyword_opportunity()
+                opp = data.get_naver_keyword_opportunity()
                 st.caption("검색량 ↑ + 우리 미입찰 + USP 매칭")
                 st.dataframe(
                     opp,
@@ -778,7 +778,7 @@ def render_naver_page():
             with c2:
                 st.markdown("**검색 트렌드 (90일)**")
                 st.caption("네이버 데이터랩 상대 지수")
-                trend = mock.naver_search_trend()
+                trend = data.get_naver_search_trend()
                 fig = go.Figure()
                 for col in ["PDRN 크림", "재생 크림", "시술 후 크림"]:
                     fig.add_trace(go.Scatter(x=trend["date"], y=trend[col], name=col, mode="lines"))
@@ -790,7 +790,7 @@ def render_naver_page():
             # SERP 경쟁사
             st.subheader('🌐 "PDRN 크림" 검색 결과 모니터링')
             st.caption("매일 자동 SERP 캡처 — 경쟁사 광고 카피 추적")
-            comp = mock.serp_competitors()
+            comp = data.get_serp_competitors()
             for _, row in comp.iterrows():
                 with st.container(border=True):
                     badge = "🟦 우리" if row["is_us"] else f"#{row['rank']}"
@@ -802,7 +802,7 @@ def render_naver_page():
         with action_col:
             st.markdown("### 🔔 오늘 추천 액션")
             st.caption("본인이 검토 후 실행")
-            for action in mock.naver_actions():
+            for action in data.get_naver_actions():
                 render_action_card(action, "naver")
 
 

@@ -69,26 +69,46 @@ def get_meta_actions():
     return mock_data.meta_actions()  # 진단 엔진은 추후
 
 
-# ───────── Naver (Mock만 — Phase 2) ─────────
+# ───────── Naver ─────────
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_naver_kpi():
+    if config.has_naver_credentials():
+        from . import naver_client
+        return _try_real(naver_client.fetch_kpi, mock_data.naver_kpi, "Naver KPI")
     return mock_data.naver_kpi()
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_naver_campaigns():
+    if config.has_naver_credentials():
+        from . import naver_client
+        return _try_real(naver_client.fetch_campaigns, mock_data.naver_campaigns, "Naver 캠페인")
     return mock_data.naver_campaigns()
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_naver_adgroups():
+    if config.has_naver_credentials():
+        from . import naver_client
+        return _try_real(naver_client.fetch_adgroups, mock_data.naver_adgroups, "Naver 광고그룹")
     return mock_data.naver_adgroups()
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_naver_keywords():
+    if config.has_naver_credentials():
+        from . import naver_client
+        return _try_real(naver_client.fetch_keywords, mock_data.naver_keywords, "Naver 키워드")
     return mock_data.naver_keywords()
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_naver_timeseries():
+    if config.has_naver_credentials():
+        from . import naver_client
+        return _try_real(naver_client.fetch_timeseries, mock_data.naver_timeseries, "Naver 시계열")
     return mock_data.naver_timeseries()
 
 
