@@ -593,6 +593,67 @@ def fetch_search_query_report(days=7, max_wait=30):
     ).reset_index(drop=True)
 
 
+def fetch_time_heatmap(days=14):
+    """요일×시간 stats. Naver Stats API breakdown=hh1.
+
+    반환: {"impressions": DataFrame, "roas": DataFrame}
+    """
+    camps = fetch_campaigns_raw()
+    if not camps:
+        return None
+
+    cids = [c.get("nccCampaignId") for c in camps]
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    until = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        rows = _call("GET", "/stats", params={
+            "ids": json.dumps(cids),
+            "fields": json.dumps(["impCnt", "clkCnt", "salesAmt", "ccnt", "convAmt"]),
+            "timeRange": json.dumps({"since": since, "until": until}),
+            "breakdown": "hh1",
+        })
+    except Exception:
+        return None
+
+    if not rows:
+        return None
+
+    # 시간 × 요일 집계
+    days_kr = ["월", "화", "수", "목", "금", "토", "일"]
+    imp_matrix = [[0] * 24 for _ in range(7)]
+    sales_matrix = [[0] * 24 for _ in range(7)]
+    convvalue_matrix = [[0] * 24 for _ in range(7)]
+
+    for r in rows:
+        d = r.get("statDt") or r.get("date")
+        if not d:
+            continue
+        try:
+            dt = datetime.strptime(d[:10], "%Y-%m-%d")
+        except Exception:
+            continue
+        weekday = dt.weekday()
+        hour = int(r.get("hh1", 0) or 0)
+        imp_matrix[weekday][hour] += r.get("impCnt", 0)
+        sales_matrix[weekday][hour] += r.get("salesAmt", 0)
+        convvalue_matrix[weekday][hour] += r.get("convAmt", 0)
+
+    impressions = pd.DataFrame(imp_matrix, index=days_kr, columns=list(range(24)))
+    # ROAS = 매출 / 광고비 × 100
+    roas_matrix = []
+    for d_idx in range(7):
+        row = []
+        for h in range(24):
+            spend = sales_matrix[d_idx][h]
+            conv = convvalue_matrix[d_idx][h]
+            row.append(int(conv / spend * 100) if spend else 0)
+        roas_matrix.append(row)
+    roas = pd.DataFrame(roas_matrix, index=days_kr, columns=list(range(24)))
+
+    return {"impressions": impressions, "roas": roas}
+
+
 def keyword_tool(hint_keywords, include_hints=True):
     """네이버 키워드 도구 API.
 

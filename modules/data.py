@@ -240,6 +240,22 @@ def execute_update_adgroup_bid(adgroup_id, new_bid):
     return {"success": True, "mock": True, "new_bid": new_bid}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_naver_time_heatmap():
+    """요일×시간 히트맵 데이터."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        try:
+            result = naver_client.fetch_time_heatmap()
+            if result is None:
+                return mock_data.naver_time_heatmap()
+            return result
+        except Exception as e:
+            st.sidebar.error(f"❌ 시간대 분석: {str(e)[:80]}")
+            return mock_data.naver_time_heatmap()
+    return mock_data.naver_time_heatmap()
+
+
 def get_bid_estimate(keyword, device="PC"):
     """키워드 순위별 예상 입찰가."""
     if config.has_naver_credentials():

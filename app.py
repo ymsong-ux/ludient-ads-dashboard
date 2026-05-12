@@ -11,7 +11,7 @@ import pandas as pd
 from datetime import datetime
 
 from modules import mock_data as mock
-from modules import data, config
+from modules import data, config, alerts
 
 
 # ───────────────── 페이지 설정 ─────────────────
@@ -57,9 +57,15 @@ with st.sidebar:
     st.caption("광고 운영 대시보드")
     st.divider()
 
+    # 알람 카운트 계산
+    _alerts = alerts.generate_alerts(data=data)
+    _alert_summary = alerts.alerts_summary(_alerts)
+    _alert_total = sum(_alert_summary.values())
+    _alert_label = f"🔔 알림 ({_alert_total})" if _alert_total else "🔔 알림"
+
     page = st.radio(
         "페이지",
-        ["Meta", "Naver", "🔑 키워드 도구", "🔬 데이터 진단", "통합", "리포트"],
+        ["Meta", "Naver", "🔑 키워드 도구", _alert_label, "🔬 데이터 진단", "통합", "리포트"],
         label_visibility="collapsed"
     )
     st.divider()
@@ -755,6 +761,9 @@ def render_naver_page():
 
                 # ───────── 입찰가 조정 (N4) ─────────
                 render_bid_adjustment(nkeywords, nadgroups)
+
+            # ───────── 시간대 히트맵 (N5) ─────────
+            render_time_heatmap()
 
             st.divider()
 
@@ -1694,6 +1703,147 @@ def render_diagnostic_page():
             )
 
 
+# ═════════════════ 알림 페이지 (N6) ═════════════════
+def render_alerts_page():
+    st.title("🔔 알림")
+    st.caption("캘린더·결재·데이터 이상 자동 감지 — 까먹기 방지용")
+
+    current_alerts = alerts.generate_alerts(data=data)
+    summary = alerts.alerts_summary(current_alerts)
+
+    # 요약 카드
+    cc = st.columns(3)
+    cc[0].metric("🔴 긴급", f"{summary['error']}건")
+    cc[1].metric("🟡 주의", f"{summary['warning']}건")
+    cc[2].metric("🔵 정보", f"{summary['info']}건")
+
+    if not current_alerts:
+        st.success("✅ 현재 알람 없음 — 모든 게 정상.")
+        return
+
+    st.divider()
+
+    # 카테고리별 그룹
+    categories = {
+        "calendar": "📅 캘린더",
+        "billing": "💸 결재",
+        "balance": "💰 잔액",
+        "campaign": "📊 캠페인",
+        "keyword": "🔑 키워드",
+        "other": "📌 기타",
+    }
+
+    grouped = {}
+    for a in current_alerts:
+        cat = a.get("category", "other")
+        grouped.setdefault(cat, []).append(a)
+
+    # 우선순위 순 표시 (error → warning → info)
+    level_priority = {"error": 0, "warning": 1, "info": 2}
+    for cat, alerts_list in grouped.items():
+        alerts_list.sort(key=lambda a: level_priority.get(a.get("level", "info"), 99))
+        cat_label = categories.get(cat, cat)
+        st.subheader(cat_label)
+        for a in alerts_list:
+            level = a.get("level", "info")
+            if level == "error":
+                st.error(f"{a['icon']} **{a['title']}**\n\n{a['body']}")
+            elif level == "warning":
+                st.warning(f"{a['icon']} **{a['title']}**\n\n{a['body']}")
+            else:
+                st.info(f"{a['icon']} **{a['title']}**\n\n{a['body']}")
+
+    st.divider()
+
+    with st.expander("📘 알림 종류 가이드"):
+        st.markdown("""
+**자동 감지 알림 (현재 활성)**:
+
+📅 **캘린더** (날짜 기준 자동)
+- 매월 14·15·16일: 브랜드검색 갱신
+- 매월 1~10일: Naver 세금계산서 결재
+- 매주 월요일: Meta 인보이스 결재
+
+💰 **잔액** (실데이터 기준)
+- 비즈머니 잔액 10만원 미만 → 🔴 긴급
+- 비즈머니 잔액 30만원 미만 → 🟡 주의
+
+📊 **캠페인** (진단 엔진 기준)
+- OFF 권장 캠페인 개수
+- 학습 미완료 광고세트 (Meta)
+
+🔑 **키워드** (Naver SA)
+- OFF 권장 키워드 정리 필요
+
+→ 매번 페이지 새로고침 시 재계산. 실시간 트리거 알림(슬랙·이메일)은 추후 백그라운드 작업으로 추가 가능.
+        """)
+
+
+# ═════════════════ 시간대 히트맵 (N5) ═════════════════
+def render_time_heatmap():
+    """Naver 검색광고 요일×시간 효율 분석. Naver 페이지에 임베드."""
+    import plotly.express as px
+
+    st.divider()
+    st.subheader("⏰ 시간대·요일 분석 (Heatmap)")
+    st.caption("언제 노출되고 언제 ROAS 좋은지 — 시간대별 입찰가 가중치 결정용")
+
+    heatmap = data.get_naver_time_heatmap()
+    if not heatmap or "impressions" not in heatmap:
+        st.info("시간대 데이터 없음. (광고 OFF 또는 데이터 부족)")
+        return
+
+    metric = st.radio("표시 지표", ["노출", "ROAS"], horizontal=True, key="heatmap_metric")
+
+    df = heatmap["impressions"] if metric == "노출" else heatmap["roas"]
+
+    fig = px.imshow(
+        df.values,
+        labels=dict(x="시간", y="요일", color="값"),
+        x=[f"{h}시" for h in df.columns],
+        y=df.index,
+        color_continuous_scale="Greens" if metric == "노출" else "RdYlGn",
+        aspect="auto",
+        text_auto=True,
+    )
+    fig.update_layout(height=300, margin=dict(t=20, b=20, l=20, r=20))
+    st.plotly_chart(fig, width="stretch")
+
+    # 인사이트 자동 생성
+    if metric == "ROAS":
+        avg = df.values.mean()
+        # 평균 이상의 시간대 찾기
+        good = []
+        for day_idx, day in enumerate(df.index):
+            for h_idx, h in enumerate(df.columns):
+                v = df.iloc[day_idx, h_idx]
+                if v >= avg * 1.3:
+                    good.append((day, h, v))
+        good.sort(key=lambda x: -x[2])
+
+        if good:
+            st.markdown("**🟢 평균 대비 효율 좋은 시간대 Top 5**:")
+            for day, h, v in good[:5]:
+                st.write(f"- **{day}요일 {h}시** — ROAS {v}% (평균 {int(avg)}% 대비)")
+            st.caption("💡 위 시간대에 입찰가 가중치 ↑ 설정 권장 (Naver 광고그룹 → 노출 시간 설정)")
+
+    with st.expander("💡 시간대 분석 활용 가이드"):
+        st.markdown("""
+**노출 패턴**:
+- 보통 낮 12~14시 + 저녁 18~22시 노출 ↑
+- 새벽·심야 노출 ↓ → Day-parting 검토 (그 시간대 입찰가 ↓)
+
+**ROAS 패턴**:
+- 점심·저녁 시간대 ROAS ↑ 경우 多 (구매 의도 시간)
+- 더마 카테고리는 저녁 8~12시 + 주말 오후 강세
+
+**활용**:
+1. ROAS Top 5 시간대 → 입찰가 ↑ 검토
+2. 새벽·심야 → 입찰가 ↓ 또는 노출 차단
+3. 주말 vs 평일 패턴 다르면 별도 광고그룹 운영
+        """)
+
+
 # ═════════════════ 라우팅 ═════════════════
 if page == "Meta":
     render_meta_page()
@@ -1701,6 +1851,8 @@ elif page == "Naver":
     render_naver_page()
 elif page == "🔑 키워드 도구":
     render_keyword_tool_page()
+elif page.startswith("🔔"):
+    render_alerts_page()
 elif page == "🔬 데이터 진단":
     render_diagnostic_page()
 elif page == "통합":

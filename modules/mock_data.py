@@ -553,6 +553,39 @@ def keyword_research(hint_keywords):
     return df.sort_values("monthly_total", ascending=False).reset_index(drop=True)
 
 
+def naver_time_heatmap():
+    """요일×시간 ROAS·노출 mock heatmap."""
+    import numpy as np
+    np.random.seed(42)
+
+    days = ["월", "화", "수", "목", "금", "토", "일"]
+    hours = list(range(24))
+
+    # 노출 패턴 (낮은 새벽, 높은 저녁)
+    base_imp = np.array([20, 10, 5, 5, 5, 10, 30, 80, 120, 140, 150, 160,
+                         180, 200, 180, 160, 180, 220, 280, 320, 280, 200, 120, 60])
+    impressions = []
+    for d in range(7):
+        # 평일 더 높음, 주말 살짝 다른 패턴
+        mult = 1.0 if d < 5 else 1.1
+        row = (base_imp * mult * np.random.uniform(0.85, 1.15, 24)).astype(int)
+        impressions.append(row)
+
+    # ROAS 패턴 (구매 시간대: 점심+저녁 높음)
+    base_roas = np.array([180, 150, 120, 100, 100, 120, 200, 260, 320, 380, 420, 400,
+                          360, 320, 300, 320, 360, 400, 440, 480, 460, 380, 280, 220])
+    roas = []
+    for d in range(7):
+        mult = 1.0 if d < 5 else 1.05
+        row = (base_roas * mult * np.random.uniform(0.9, 1.1, 24)).astype(int)
+        roas.append(row)
+
+    return {
+        "impressions": pd.DataFrame(impressions, index=days, columns=hours),
+        "roas": pd.DataFrame(roas, index=days, columns=hours),
+    }
+
+
 def serp_competitors(keyword="PDRN 크림"):
     return pd.DataFrame([
         {"rank": 1, "advertiser": "닥터지", "headline": "PDRN 재생 앰플 - 8주 임상시험 결과", "description": "피부과 임상으로 입증된 효과. 첫 구매 30% 할인", "url": "drg.co.kr", "is_us": False},
