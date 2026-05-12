@@ -185,3 +185,38 @@ def get_naver_shopping():
 
 def clear_cache():
     st.cache_data.clear()
+
+
+# ───────── 액션 실행 (Phase N2) ─────────
+
+
+def execute_add_keyword(adgroup_id, keyword, bid_amt=None):
+    """키워드 추가. 실데이터면 API 호출, Mock이면 시뮬레이션."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        return naver_client.add_keyword(adgroup_id, keyword, bid_amt)
+    # Mock 모드 — 성공 시뮬레이션
+    return {"success": True, "keyword_id": "mock_kw_id", "mock": True}
+
+
+def execute_block_keyword(adgroup_id, keyword):
+    """노출 제외 키워드 추가."""
+    if config.has_naver_credentials():
+        from . import naver_client
+        return naver_client.add_negative_keyword(adgroup_id, keyword)
+    return {"success": True, "mock": True}
+
+
+def log_action(action_type, payload, result):
+    """감사용 로그를 session_state에 저장."""
+    from datetime import datetime as _dt
+    if "action_log" not in st.session_state:
+        st.session_state["action_log"] = []
+    st.session_state["action_log"].insert(0, {
+        "ts": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": action_type,
+        "payload": payload,
+        "result": result,
+    })
+    # 최근 50개만 유지
+    st.session_state["action_log"] = st.session_state["action_log"][:50]

@@ -1101,30 +1101,128 @@ def render_search_query_report():
     if len(new_kws) > 0:
         with st.expander(f"🟢 신규 키워드로 등록 권장 — {len(new_kws)}개"):
             st.caption("아래 검색어들은 이미 우리 광고에 노출돼서 구매까지 발생한 키워드예요. 신규 키워드로 등록하면 직접 입찰 가능.")
-            for _, row in new_kws.head(10).iterrows():
+            for idx, row in new_kws.head(10).iterrows():
                 col_a, col_b = st.columns([4, 1])
                 col_a.markdown(
                     f"**`{row['search_query']}`** — "
                     f"구매 {row['purchases']}건 / CVR {row['cvr']:.1f}% / CPA ₩{int(row['cpa']) if pd.notna(row['cpa']) else 0:,} "
                     f"(우리 키워드: `{row['our_keyword']}`)"
                 )
-                if col_b.button("➕ 등록", key=f"add_kw_{_}", width="stretch", disabled=True):
-                    pass
-            st.caption("⚠️ '등록' 버튼은 Phase N2에서 API 연결 예정. 지금은 표시만.")
+                if col_b.button("➕ 등록", key=f"add_kw_{idx}", width="stretch"):
+                    st.session_state["pending_add"] = {
+                        "search_query": row["search_query"],
+                        "our_keyword": row["our_keyword"],
+                        "adgroup_id": row.get("adgroup_id", ""),
+                        "purchases": int(row["purchases"]),
+                        "cvr": float(row["cvr"]),
+                    }
+                    st.rerun()
 
     if len(block_kws) > 0:
         with st.expander(f"🔴 노출 제외 권장 — {len(block_kws)}개"):
             st.caption("클릭은 많은데 구매로 안 이어진 검색어. 의도 불일치 가능성. 노출 제외 키워드로 등록하면 광고비 절감.")
-            for _, row in block_kws.head(10).iterrows():
+            for idx, row in block_kws.head(10).iterrows():
                 col_a, col_b = st.columns([4, 1])
                 col_a.markdown(
                     f"**`{row['search_query']}`** — "
                     f"클릭 {row['clicks']}회 / 구매 0건 / 광고비 ₩{int(row['spend']):,} 낭비 "
                     f"(우리 키워드: `{row['our_keyword']}`)"
                 )
-                if col_b.button("🚫 제외", key=f"block_kw_{_}", width="stretch", disabled=True):
-                    pass
-            st.caption("⚠️ '제외' 버튼은 Phase N2에서 API 연결 예정.")
+                if col_b.button("🚫 제외", key=f"block_kw_{idx}", width="stretch"):
+                    st.session_state["pending_block"] = {
+                        "search_query": row["search_query"],
+                        "our_keyword": row["our_keyword"],
+                        "adgroup_id": row.get("adgroup_id", ""),
+                        "clicks": int(row["clicks"]),
+                        "spend": int(row["spend"]),
+                    }
+                    st.rerun()
+
+    # ───── 모달: 키워드 등록 확인 ─────
+    if st.session_state.get("pending_add"):
+        @st.dialog("키워드 등록 확인", width="large")
+        def confirm_add():
+            p = st.session_state["pending_add"]
+            st.markdown(f"### `{p['search_query']}` 를 신규 키워드로 등록할까요?")
+            st.markdown(f"- **소속 광고그룹**: `{p['adgroup_id']}` (우리 키워드: `{p['our_keyword']}`)")
+            st.markdown(f"- **검증 데이터**: 구매 {p['purchases']}건, CVR {p['cvr']:.1f}%")
+            st.divider()
+
+            bid_col, _ = st.columns([1, 2])
+            use_group = bid_col.checkbox("광고그룹 기본 입찰가 사용", value=True, key="add_use_group")
+            bid_amt = None
+            if not use_group:
+                bid_amt = st.number_input("키워드 개별 입찰가 (원)", min_value=70, max_value=100_000,
+                                          value=1000, step=10, key="add_bid")
+                st.caption("💡 Naver 최소 입찰가 70원. 1~3위 평균은 키워드마다 다름.")
+
+            st.warning("⚠️ 실행하면 즉시 Naver 광고에 키워드가 등록돼요. 광고비가 발생할 수 있어요.")
+
+            c1, c2 = st.columns(2)
+            if c1.button("✅ 등록 실행", type="primary", width="stretch"):
+                with st.spinner("등록 중..."):
+                    result = data.execute_add_keyword(p["adgroup_id"], p["search_query"], bid_amt)
+                    data.log_action("ADD_KEYWORD", p, result)
+                if result.get("success"):
+                    msg = f"등록 완료: {p['search_query']}"
+                    if result.get("mock"):
+                        msg += " (Mock 모드 — 실제 등록 X)"
+                    st.success(msg)
+                else:
+                    st.error(f"실패: {result.get('error', '알 수 없는 오류')}")
+                st.session_state.pop("pending_add", None)
+                st.rerun()
+            if c2.button("취소", width="stretch"):
+                st.session_state.pop("pending_add", None)
+                st.rerun()
+        confirm_add()
+
+    # ───── 모달: 노출 제외 확인 ─────
+    if st.session_state.get("pending_block"):
+        @st.dialog("노출 제외 키워드 등록 확인", width="large")
+        def confirm_block():
+            p = st.session_state["pending_block"]
+            st.markdown(f"### `{p['search_query']}` 를 노출 제외 키워드로 등록할까요?")
+            st.markdown(f"- **소속 광고그룹**: `{p['adgroup_id']}` (원래 키워드: `{p['our_keyword']}`)")
+            st.markdown(f"- **광고비 낭비**: 클릭 {p['clicks']}회 / 구매 0건 / 광고비 ₩{p['spend']:,}")
+            st.divider()
+
+            st.info("ℹ️ 노출 제외 등록 후, 이 검색어로는 우리 광고가 더 이상 노출되지 않아요. "
+                    "광고비 절감 효과는 즉시 발생.")
+            st.warning("⚠️ 실수로 제외하면 매출 영향 가능. 검색어 의도 다시 확인.")
+
+            c1, c2 = st.columns(2)
+            if c1.button("✅ 제외 실행", type="primary", width="stretch"):
+                with st.spinner("제외 등록 중..."):
+                    result = data.execute_block_keyword(p["adgroup_id"], p["search_query"])
+                    data.log_action("BLOCK_KEYWORD", p, result)
+                if result.get("success"):
+                    msg = f"노출 제외 완료: {p['search_query']}"
+                    if result.get("mock"):
+                        msg += " (Mock 모드 — 실제 등록 X)"
+                    st.success(msg)
+                else:
+                    st.error(f"실패: {result.get('error', '알 수 없는 오류')}")
+                st.session_state.pop("pending_block", None)
+                st.rerun()
+            if c2.button("취소", width="stretch"):
+                st.session_state.pop("pending_block", None)
+                st.rerun()
+        confirm_block()
+
+    # ───── 실행 로그 ─────
+    if st.session_state.get("action_log"):
+        with st.expander(f"📜 실행 로그 ({len(st.session_state['action_log'])}건)"):
+            for entry in st.session_state["action_log"][:20]:
+                icon = "➕" if entry["type"] == "ADD_KEYWORD" else "🚫"
+                payload = entry["payload"]
+                status = "✅" if entry["result"].get("success") else "❌"
+                mock_tag = " [Mock]" if entry["result"].get("mock") else ""
+                st.markdown(
+                    f"`{entry['ts']}` {icon} {status}{mock_tag} "
+                    f"**{payload.get('search_query', '?')}** "
+                    f"({payload.get('our_keyword', '?')} → {payload.get('adgroup_id', '?')})"
+                )
 
     # 가이드
     with st.expander("📘 검색어 보고서 활용 가이드"):

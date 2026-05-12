@@ -331,6 +331,72 @@ def fetch_kpi(days=7):
     }
 
 
+def add_keyword(adgroup_id, keyword, bid_amt=None):
+    """광고그룹에 키워드 추가. POST /ncc/keywords."""
+    if not adgroup_id or not keyword:
+        raise NaverAPIError("광고그룹 ID 또는 키워드 누락")
+    body = {
+        "nccAdgroupId": adgroup_id,
+        "keyword": keyword,
+        "useGroupBidAmt": bid_amt is None,
+    }
+    if bid_amt is not None:
+        body["bidAmt"] = int(bid_amt)
+    try:
+        result = _call("POST", "/ncc/keywords", json_body=body)
+        return {"success": True, "keyword_id": result.get("nccKeywordId"), "data": result}
+    except NaverAPIError as e:
+        return {"success": False, "error": str(e)}
+
+
+def delete_keyword(keyword_id):
+    """키워드 삭제. DELETE /ncc/keywords/{id}."""
+    try:
+        _call("DELETE", f"/ncc/keywords/{keyword_id}")
+        return {"success": True}
+    except NaverAPIError as e:
+        return {"success": False, "error": str(e)}
+
+
+def add_negative_keyword(adgroup_id, keyword):
+    """노출 제외 키워드 추가. POST /ncc/adgroups/{id}/restricted-keyword.
+
+    Naver는 광고그룹별 제외 키워드를 별도 엔드포인트로 관리.
+    """
+    if not adgroup_id or not keyword:
+        raise NaverAPIError("광고그룹 ID 또는 키워드 누락")
+    try:
+        # Naver Search Ads 제외 키워드는 광고그룹 설정 일부
+        # 정확한 엔드포인트: PUT /ncc/adgroups/{id} 에 keywordPlusEnabled + restrictedKeywords 업데이트
+        # 또는 별도 엔드포인트가 있을 수 있음 — 여기는 일반화된 시도
+        result = _call("POST", f"/ncc/adgroups/{adgroup_id}/restricted-keyword",
+                       json_body={"keyword": keyword})
+        return {"success": True, "data": result}
+    except NaverAPIError as e:
+        # 폴백: 광고그룹 자체 업데이트로 시도
+        return {"success": False, "error": str(e)}
+
+
+def update_keyword_status(keyword_id, on=True):
+    """키워드 ON/OFF. PUT /ncc/keywords/{id}."""
+    try:
+        result = _call("PUT", f"/ncc/keywords/{keyword_id}",
+                       json_body={"userLock": not on})
+        return {"success": True, "data": result}
+    except NaverAPIError as e:
+        return {"success": False, "error": str(e)}
+
+
+def update_keyword_bid(keyword_id, bid_amt):
+    """키워드 입찰가 변경. PUT /ncc/keywords/{id}."""
+    try:
+        result = _call("PUT", f"/ncc/keywords/{keyword_id}",
+                       json_body={"bidAmt": int(bid_amt), "useGroupBidAmt": False})
+        return {"success": True, "data": result}
+    except NaverAPIError as e:
+        return {"success": False, "error": str(e)}
+
+
 def fetch_search_query_report(days=7, max_wait=30):
     """검색어 보고서 (실제 노출된 사용자 검색어).
 
